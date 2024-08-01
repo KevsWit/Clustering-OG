@@ -21,7 +21,4 @@ Por lo tanto, es necesario desarrollar algoritmos de clustering que no solo iden
 Evaluar el algoritmo desarrollado utilizando conjuntos de datos de prueba y métricas.
 
 ## _**Referencias**_
-- Easley, D., & Kleinberg, J. (2010). Networks, Crowds, and Markets: Reasoning About a Highly Connected World.
-- Diestel, R. (2005). Graph Theory.
-- Raschka, S., et al. (2020). Python Machine Learning.
-- Zhang, et al. (2024). Título del Artículo.
+- Zhang, F., Guo, H., Ouyang, D., Yang, S., Lin, X., & Tian, Z. (2024). Size-constrained community search on large networks: An effective and efficient solution. IEEE Transactions on Knowledge and Data Engineering, 36(1), 356-371. https://doi.org/10.1109/TKDE.2023.3280483
