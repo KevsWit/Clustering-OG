@@ -1,5 +1,4 @@
-#pip install networkx
-#pip install itertools
+
 import networkx as nx
 import itertools
 
