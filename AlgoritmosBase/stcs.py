@@ -146,8 +146,8 @@ def st_exa(G, q, l, h):
 # Example usage for all algorithms
 G = nx.karate_club_graph()
 q = 0
-l = 8
-h = 11
+l = 17
+h = 20
 
 community = st_exa(G, q, l, h)
 if community:
