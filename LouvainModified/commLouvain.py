@@ -2,8 +2,6 @@
 """
 This module implements community detection.
 """
-# from __future__ import print_function
-
 import array
 
 import numbers
@@ -12,12 +10,11 @@ import warnings
 import networkx as nx
 import numpy as np
 
-# from .commStatus import Status
 import matplotlib.pyplot as plt
 
-__author__ = """Thomas Aynaud (thomas.aynaud@lip6.fr)"""
-#    Copyright (C) 2009 by
-#    Thomas Aynaud <thomas.aynaud@lip6.fr>
+__author__ = """Kevin Castillo (kev.gcastillo@outlook.com), Thomas Aynaud (thomas.aynaud@lip6.fr)"""
+#    Copyright (C) 2024 by
+#    Kevin Castillo <kev.gcastillo@outlook.com>
 #    All rights reserved.
 #    BSD license.
 
@@ -637,11 +634,12 @@ def __randomize(items, random_state):
 
 ######### version modificada
 
-# Modificación para restringir el tamaño de cada cluster
-def __insert_with_size_limit(node, com, weight, status, max_cluster_size):
-    """Insert node into community with size limit and modify status"""
-    # Verificamos si la comunidad puede aceptar más nodos
+def __insert_with_flexible_size_limit(node, com, weight, status, min_cluster_size, max_cluster_size):
+    """Insert node into community with flexible size limits and modify status"""
+    # Verificar el tamaño actual de la comunidad
     current_size = sum(1 for n in status.node2com if status.node2com[n] == com)
+    
+    # Permitir el movimiento si no excede el máximo y si no es menor que el mínimo
     if current_size < max_cluster_size:
         status.node2com[node] = com
         status.degrees[com] = (status.degrees.get(com, 0.) +
@@ -651,8 +649,8 @@ def __insert_with_size_limit(node, com, weight, status, max_cluster_size):
         return True
     return False
 
-def __one_level_with_size_limit(graph, status, weight_key, resolution, random_state, max_cluster_size):
-    """Compute one level of communities with size limit"""
+def __one_level_with_flexible_limits(graph, status, weight_key, resolution, random_state, min_cluster_size, max_cluster_size):
+    """Compute one level of communities with flexible size limits"""
     modified = True
     nb_pass_done = 0
     cur_mod = __modularity(status, resolution)
@@ -677,7 +675,8 @@ def __one_level_with_size_limit(graph, status, weight_key, resolution, random_st
                 incr = remove_cost + dnc - \
                        resolution * status.degrees.get(com, 0.) * degc_totw
                 if incr > best_increase:
-                    if __insert_with_size_limit(node, com, neigh_communities.get(com, 0.), status, max_cluster_size):
+                    # Solo mover si la comunidad tiene el tamaño adecuado
+                    if __insert_with_flexible_size_limit(node, com, neigh_communities.get(com, 0.), status, min_cluster_size, max_cluster_size):
                         best_increase = incr
                         best_com = com
             __insert(node, best_com,
@@ -688,10 +687,10 @@ def __one_level_with_size_limit(graph, status, weight_key, resolution, random_st
         if new_mod - cur_mod < __MIN:
             break
 
-# Función para generar el dendrograma con la restricción de tamaño
-def generate_dendrogram_with_size_limit(graph, part_init=None, weight='weight', resolution=1.,
-                                        random_state=None, max_cluster_size=5):
-    """Generar dendrograma con restricción de tamaño en las comunidades"""
+# Función para generar el dendrograma con límites de tamaño flexibles
+def generate_dendrogram_with_flexible_limits(graph, part_init=None, weight='weight', resolution=1.,
+                                             random_state=None, min_cluster_size=1, max_cluster_size=5):
+    """Generar dendrograma con límites de tamaño flexibles en las comunidades"""
     if graph.is_directed():
         raise TypeError("Bad graph type, use only non directed graph")
 
@@ -709,8 +708,8 @@ def generate_dendrogram_with_size_limit(graph, part_init=None, weight='weight', 
     status.init(current_graph, weight, part_init)
     status_list = list()
 
-    # Usar la nueva función __one_level_with_size_limit que incluye la restricción de tamaño
-    __one_level_with_size_limit(current_graph, status, weight, resolution, random_state, max_cluster_size)
+    # Usar la nueva función __one_level_with_flexible_limits que incluye los límites de tamaño
+    __one_level_with_flexible_limits(current_graph, status, weight, resolution, random_state, min_cluster_size, max_cluster_size)
     new_mod = __modularity(status, resolution)
     partition = __renumber(status.node2com)
     status_list.append(partition)
@@ -719,7 +718,7 @@ def generate_dendrogram_with_size_limit(graph, part_init=None, weight='weight', 
     status.init(current_graph, weight)
 
     while True:
-        __one_level_with_size_limit(current_graph, status, weight, resolution, random_state, max_cluster_size)
+        __one_level_with_flexible_limits(current_graph, status, weight, resolution, random_state, min_cluster_size, max_cluster_size)
         new_mod = __modularity(status, resolution)
         if new_mod - mod < __MIN:
             break
@@ -731,10 +730,31 @@ def generate_dendrogram_with_size_limit(graph, part_init=None, weight='weight', 
     
     return status_list[:]
 
-# Función para obtener la mejor partición
-def best_partition_with_size_limit(graph, partition=None, weight='weight', resolution=1., random_state=None, max_cluster_size=5):
-    """Obtener la mejor partición con restricción de tamaño"""
-    dendo = generate_dendrogram_with_size_limit(graph, partition, weight, resolution, random_state, max_cluster_size)
+def preprocess_clustering(graph, min_cluster_size, max_cluster_size):
+    """Preprocesar el grafo para agrupar nodos cercanos antes de Louvain"""
+    clustering = nx.community.greedy_modularity_communities(graph)
+    initial_partition = {}
+    
+    # Asignar nodos a clusters en función del preprocesamiento
+    for i, cluster in enumerate(clustering):
+        if min_cluster_size <= len(cluster) <= max_cluster_size:
+            for node in cluster:
+                initial_partition[node] = i
+
+    # Asegurarse de que todos los nodos tengan una comunidad asignada
+    for node in graph.nodes():
+        if node not in initial_partition:
+            initial_partition[node] = node  # Asignar cada nodo restante a su propia comunidad
+    
+    return initial_partition
+
+# Función para obtener la mejor partición con límites de tamaño flexibles
+def best_partition_with_flexible_limits(graph, partition=None, weight='weight', resolution=1., random_state=None, min_cluster_size=1, max_cluster_size=5):
+    """Obtener la mejor partición con límites de tamaño flexibles"""
+    # Preprocesamiento inicial para agrupar nodos cercanos
+    part_init = preprocess_clustering(graph, min_cluster_size, max_cluster_size)
+    
+    dendo = generate_dendrogram_with_flexible_limits(graph, part_init, weight, resolution, random_state, min_cluster_size, max_cluster_size)
     return partition_at_level(dendo, len(dendo) - 1)
 
 #########
@@ -754,9 +774,10 @@ G = nx.karate_club_graph()
 # nx.draw_networkx_labels(G, pos)
 # plt.show()
 
-# Aplicar el algoritmo de Louvain modificado con restricción de tamaño
-max_cluster_size = 17  # Tamaño máximo permitido para cada cluster
-partition = best_partition_with_size_limit(G, max_cluster_size=max_cluster_size)
+# Aplicar el algoritmo de Louvain modificado con límites de tamaño flexibles
+min_cluster_size = 2  # Tamaño mínimo permitido para cada cluster
+max_cluster_size = 6  # Tamaño máximo permitido para cada cluster
+partition = best_partition_with_flexible_limits(G, min_cluster_size=min_cluster_size, max_cluster_size=max_cluster_size)
 
 # Dibujar el grafo con las comunidades detectadas
 pos = nx.spring_layout(G)
