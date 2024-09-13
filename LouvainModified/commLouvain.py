@@ -20,8 +20,8 @@ __PASS_MAX = -1
 __MIN = 0.0000001
 
 # Definir las restricciones de tamaño para las comunidades
-MIN_SIZE = 7   # Tamaño mínimo permitido para una comunidad
-MAX_SIZE = 15  # Tamaño máximo permitido para una comunidad
+MIN_SIZE = 4   # Tamaño mínimo permitido para una comunidad
+MAX_SIZE = 10  # Tamaño máximo permitido para una comunidad
 
 class Status(object):
     """
