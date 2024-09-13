@@ -1,157 +1,79 @@
-
 import networkx as nx
-import itertools
 
-# Truss decomposition function
-def truss_decomposition(G):
-    support = {}
-    for u, v in G.edges():
-        support[(u, v)] = len(list(nx.common_neighbors(G, u, v)))
-    trusses = {}
-    k = 2
-    while support:
-        new_support = {}
-        for u, v in support:
-            if support[(u, v)] >= k - 2:
-                new_support[(u, v)] = support[(u, v)]
-        if not new_support:
-            break
-        trusses[k] = list(new_support.keys())
-        support = new_support
-        k += 1
-    return trusses
+# Función de puntuación para evaluar candidatos
+def score(G, node, community):
+    # Número de vecinos comunes con la comunidad
+    return len(set(G.neighbors(node)).intersection(community.nodes()))
 
-# Initialize subgraph function
-def initialize_subgraph(G, q, l, h):
-    trusses = truss_decomposition(G)
-    for k in sorted(trusses.keys(), reverse=True):
-        subgraph = G.edge_subgraph(trusses[k])
-        for component in nx.connected_components(subgraph):
-            if q in component and l <= len(component) <= h:
-                return subgraph.subgraph(component)
-    return None
+# Algoritmo mejorado STCS para encontrar una comunidad
+def improved_stcs(G, q, l, h, visited_nodes):
+    community = nx.Graph()
+    community.add_node(q)
+    candidates = set(G.neighbors(q)) - visited_nodes
+    visited = set()
+    
+    while len(community.nodes()) < h and candidates:
+        # Seleccionar el mejor candidato basado en la función de puntuación
+        candidate = max(candidates, key=lambda node: score(G, node, community))
+        community.add_node(candidate)
+        community.add_edges_from(
+            (candidate, neighbor) for neighbor in G.neighbors(candidate) if neighbor in community.nodes()
+        )
+        visited.add(candidate)
+        candidates.remove(candidate)
+        # Actualizar candidatos con los vecinos del candidato recién agregado
+        new_neighbors = set(G.neighbors(candidate)) - community.nodes() - visited - visited_nodes
+        candidates.update(new_neighbors)
+    
+    return community
 
-# ST-Base algorithm
-def st_base(G, q, l, h):
-    initial_subgraph = initialize_subgraph(G, q, l, h)
-    return initial_subgraph
+# Función para encontrar todas las comunidades en el grafo
+def find_all_communities(G, l, h):
+    visited_nodes = set()
+    communities = []
+    for q in G.nodes():
+        if q not in visited_nodes:
+            community = improved_stcs(G, q, l, h, visited_nodes)
+            if len(community.nodes()) >= l:
+                communities.append(community)
+                visited_nodes.update(community.nodes())
+            else:
+                # Si la comunidad es demasiado pequeña, no se añade y el nodo queda sin asignar
+                pass
+    # Segunda pasada para asignar nodos no asignados
+    unassigned_nodes = set(G.nodes()) - visited_nodes
+    for node in unassigned_nodes:
+        # Intentar asignar el nodo a la comunidad más cercana
+        neighbor_communities = []
+        for idx, community in enumerate(communities):
+            if node in G:
+                neighbors = set(G.neighbors(node))
+                if neighbors.intersection(community.nodes()):
+                    neighbor_communities.append((idx, len(neighbors.intersection(community.nodes()))))
+        if neighbor_communities:
+            # Asignar el nodo a la comunidad con la que tiene más conexiones
+            best_community_idx = max(neighbor_communities, key=lambda x: x[1])[0]
+            best_community = communities[best_community_idx]
+            best_community.add_node(node)
+            best_community.add_edges_from(
+                (node, neighbor) for neighbor in G.neighbors(node) if neighbor in best_community.nodes()
+            )
+            visited_nodes.add(node)
+        else:
+            # Si el nodo no está conectado a ninguna comunidad, crear una nueva comunidad
+            new_community = nx.Graph()
+            new_community.add_node(node)
+            visited_nodes.add(node)
+            communities.append(new_community)
+    return communities
 
-# ST-Heu algorithm
-def st_heu(G, q, l, h):
-    initial_subgraph = initialize_subgraph(G, q, l, h)
-    if not initial_subgraph:
-        return None
-
-    def heuristic_expand(subgraph):
-        candidates = set(G.neighbors(q)) - set(subgraph.nodes())
-        while len(subgraph.nodes()) < h and candidates:
-            candidate = max(candidates, key=lambda node: G.degree(node))
-            subgraph.add_node(candidate)
-            subgraph.add_edges_from((candidate, neighbor) for neighbor in G.neighbors(candidate) if neighbor in subgraph)
-            candidates = set(G.neighbors(candidate)) - set(subgraph.nodes())
-        return subgraph
-
-    return heuristic_expand(initial_subgraph)
-
-# Branch and bound function
-def branch_and_bound(G, q, l, h, initial_subgraph):
-    best_subgraph = initial_subgraph
-    best_min_support = min([G.degree(v) for v in initial_subgraph.nodes()])
-
-    def recurse(subgraph, candidates, min_support):
-        nonlocal best_subgraph, best_min_support
-        if len(subgraph.nodes()) > h:
-            return
-        if len(subgraph.nodes()) >= l and min_support > best_min_support:
-            best_subgraph = subgraph.copy()
-            best_min_support = min_support
-        for candidate in candidates:
-            new_subgraph = subgraph.copy()
-            new_subgraph.add_node(candidate)
-            new_subgraph.add_edges_from((candidate, neighbor) for neighbor in G.neighbors(candidate) if neighbor in new_subgraph)
-            new_candidates = set(G.neighbors(candidate)) - set(new_subgraph.nodes())
-            new_min_support = min(min_support, min([new_subgraph.degree(v) for v in new_subgraph.nodes()]))
-            recurse(new_subgraph, new_candidates, new_min_support)
-
-    initial_candidates = set(G.neighbors(q)) - set(initial_subgraph.nodes())
-    recurse(initial_subgraph, initial_candidates, best_min_support)
-    return best_subgraph
-
-# ST-B&B algorithm
-def st_bb(G, q, l, h):
-    initial_subgraph = initialize_subgraph(G, q, l, h)
-    if initial_subgraph:
-        return branch_and_bound(G, q, l, h, initial_subgraph)
-    return None
-
-# BrandCheck algorithm
-def brandcheck(G, q, l, h):
-    initial_subgraph = initialize_subgraph(G, q, l, h)
-    if not initial_subgraph:
-        return None
-
-    def check_structure(subgraph):
-        for node in subgraph.nodes():
-            neighbors = set(G.neighbors(node))
-            if len(neighbors.intersection(subgraph.nodes())) < l:
-                return False
-        return True
-
-    if check_structure(initial_subgraph):
-        return initial_subgraph
-    return None
-
-# ST-B&BP algorithm
-def st_bbp(G, q, l, h):
-    initial_subgraph = initialize_subgraph(G, q, l, h)
-    if not initial_subgraph:
-        return None
-
-    def branch_and_bound_with_priorities(subgraph, candidates, min_support):
-        nonlocal best_subgraph, best_min_support
-        if len(subgraph.nodes()) > h:
-            return
-        if len(subgraph.nodes()) >= l and min_support > best_min_support:
-            best_subgraph = subgraph.copy()
-            best_min_support = min_support
-        for candidate in sorted(candidates, key=lambda x: G.degree(x), reverse=True):
-            new_subgraph = subgraph.copy()
-            new_subgraph.add_node(candidate)
-            new_subgraph.add_edges_from((candidate, neighbor) for neighbor in G.neighbors(candidate) if neighbor in new_subgraph)
-            new_candidates = set(G.neighbors(candidate)) - set(new_subgraph.nodes())
-            new_min_support = min(min_support, min([new_subgraph.degree(v) for v in new_subgraph.nodes()]))
-            branch_and_bound_with_priorities(new_subgraph, new_candidates, new_min_support)
-
-    best_subgraph = initial_subgraph
-    best_min_support = min([G.degree(v) for v in initial_subgraph.nodes()])
-    initial_candidates = set(G.neighbors(q)) - set(initial_subgraph.nodes())
-    branch_and_bound_with_priorities(initial_subgraph, initial_candidates, best_min_support)
-    return best_subgraph
-
-# ST-Exa algorithm
-def st_exa(G, q, l, h):
-    nodes = list(G.nodes())
-    best_subgraph = None
-    best_min_support = -1
-
-    for subset in itertools.combinations(nodes, l):
-        subgraph = G.subgraph(subset)
-        if q in subgraph.nodes() and l <= len(subgraph.nodes()) <= h:
-            min_support = min([G.degree(v) for v in subgraph.nodes()])
-            if min_support > best_min_support:
-                best_subgraph = subgraph
-                best_min_support = min_support
-    return best_subgraph
-
-# Example usage for all algorithms
+# Ejemplo de uso
 G = nx.karate_club_graph()
-q = 0
-l = 17
-h = 20
+l = 3  # Tamaño mínimo de la comunidad
+h = 7 # Tamaño máximo de la comunidad
 
-community = st_exa(G, q, l, h)
-if community:
-    print(f"ST-Exa Vertices: {community.nodes()}")
-    print(f"ST-Exa Edges: {community.edges()}")
-else:
-    print("ST-Exa: No community found.")
+communities = find_all_communities(G, l, h)
+for idx, community in enumerate(communities):
+    print(f"Comunidad {idx+1}:")
+    print(f"  Nodos: {sorted(community.nodes())}")
+    print(f"  Número de aristas: {community.number_of_edges()}")
