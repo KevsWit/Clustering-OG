@@ -634,7 +634,7 @@ def __randomize(items, random_state):
 
 ######### version modificada
 
-def __insert_with_limits(node, com, weight, status, min_cluster_size, max_cluster_size):
+def __insert_with_limits(node, com, weight, status, max_cluster_size):
     """Insert node into community with size limits and modify status"""
     current_size = sum(1 for n in status.node2com if status.node2com[n] == com)
 
@@ -642,6 +642,15 @@ def __insert_with_limits(node, com, weight, status, min_cluster_size, max_cluste
         status.node2com[node] = com
         status.degrees[com] = status.degrees.get(com, 0.0) + status.gdegrees.get(node, 0.0)
         status.internals[com] = status.internals.get(com, 0.0) + weight + status.loops.get(node, 0.0)
+        return True
+    return False
+
+def __remove_with_limits(node, com, weight, status, min_cluster_size):
+    current_size = sum(1 for n in status.node2com if status.node2com[n] == com)
+    if current_size - 1 >= min_cluster_size:
+        status.degrees[com] = (status.degrees.get(com, 0.0) - status.gdegrees.get(node, 0.0))
+        status.internals[com] = float(status.internals.get(com, 0.0) - weight - status.loops.get(node, 0.0))
+        status.node2com[node] = -1  # Marcar el nodo como removido
         return True
     return False
 
@@ -662,24 +671,24 @@ def __one_level_with_limits(graph, status, weight_key, resolution, random_state,
             degc_totw = status.gdegrees.get(node, 0.0) / (status.total_weight * 2.0)
             neigh_communities = __neighcom(node, graph, status, weight_key)
             remove_cost = -neigh_communities.get(com_node, 0.0) + resolution * (status.degrees.get(com_node, 0.0) - status.gdegrees.get(node, 0.0)) * degc_totw
-            __remove(node, com_node, neigh_communities.get(com_node, 0.0), status)
+            __remove_with_limits(node, com_node, neigh_communities.get(com_node, 0.0), status, min_cluster_size)
             best_com = com_node
             best_increase = 0.0
 
             for com, dnc in __randomize(neigh_communities.items(), random_state):
                 incr = remove_cost + dnc - resolution * status.degrees.get(com, 0.0) * degc_totw
 
-                if incr > best_increase and __insert_with_limits(node, com, dnc, status, min_cluster_size, max_cluster_size):
+                if incr > best_increase and __insert_with_limits(node, com, dnc, status, max_cluster_size):
                     best_increase = incr
                     best_com = com
                     break
 
             if best_com != com_node:
                 modified = True
-                __insert(node, best_com, neigh_communities.get(best_com, 0.0), status)
+                __insert_with_limits(node, best_com, neigh_communities.get(best_com, 0.0), status ,max_cluster_size)
             else:
                 # Reinsert the node back to its original community if no better community was found
-                __insert(node, com_node, neigh_communities.get(com_node, 0.0), status)
+                __insert_with_limits(node, best_com, neigh_communities.get(best_com, 0.0), status, max_cluster_size)
         
         new_mod = __modularity(status, resolution)
         if new_mod - cur_mod < __MIN:
@@ -747,8 +756,8 @@ G = nx.karate_club_graph()
 # plt.show()
 
 # Aplicar el algoritmo de Louvain modificado con límites de tamaño de clúster
-min_cluster_size = 5
-max_cluster_size = 6
+min_cluster_size = 3
+max_cluster_size = 8
 partition = best_partition_with_limits(G, min_cluster_size=min_cluster_size, max_cluster_size=max_cluster_size)
 
 # Dibujar el grafo con las comunidades detectadas
