@@ -46,8 +46,8 @@ def ST_Base(G, q, l, h, trussness):
         v = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), trussness[x]))
         C.add(v)
         R.remove(v)
-        R.update([u for u in set(G.neighbors(v)) if trussness[u] >= k_star] - C)
-    
+        R.update(set([u for u in set(G.neighbors(v)) if trussness[u] >= k_star]) - C)  # Corregido
+
     H = nx.subgraph(G, C)
     k_prime = max([k for k in range(2, max(trussness.values())+1) 
                    if len([v for v in nx.node_connected_component(H, q) if trussness[v] >= k]) >= l])
@@ -127,8 +127,11 @@ def ST_BandB(C, R, G, l, h, k_prime, trussness):
 
 def ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness):
     """ST-B&BP: Optimized Branch and Bound with Pruning."""
+    H = None  # Inicializamos H como None para evitar UnboundLocalError
+    
     if k_prime == k_star:
-        return H
+        return nx.subgraph(G, C)  # Retorna el subgrafo actual si es óptimo
+
     if len(C) == h or (len(C) >= l and len(R) == 0):
         k_hat = max([k for k in range(2, max(trussness.values())+1) 
                      if len([v for v in nx.node_connected_component(G, q) if trussness[v] >= k]) >= l])
@@ -140,11 +143,11 @@ def ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness):
         R = {v for v in R if len(set(G.neighbors(v)) & C) + h - len(C) - 1 >= k_prime}
         v_star = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), trussness[x]))
         V_star = {v_star} | {u for u in set(G.neighbors(v_star)) if trussness[u] >= k_prime}
-        if not V_star:
-            return H
-        H = ST_BandBP(G, q, l, h, k_star, k_prime, C | V_star, R - V_star, trussness)
+        if V_star:
+            H = ST_BandBP(G, q, l, h, k_star, k_prime, C | V_star, R - V_star, trussness)
     
-    return H
+    return H if H is not None else nx.subgraph(G, C)  # Retorna H o el subgrafo actual
+
 
 def ST_Exa(G, q, l, h, trussness):
     """ST-Exa: Final exact algorithm."""
@@ -162,10 +165,12 @@ def ST_Exa(G, q, l, h, trussness):
 G = nx.karate_club_graph()  # Usando un grafo de ejemplo de NetworkX
 trussness = truss_decomposition(G)
 q = 0  # Nodo de consulta
-l, h = 2, 12  # Restricciones de tamaño
+l, h = 10, 12  # Restricciones de tamaño
 
 H = ST_Exa(G, q, l, h, trussness)
 print("Subgrafo resultante:", H.nodes)
 
+
 # Problemas con ciertos límites
-# h menor a 10; h igual a 11 y 12
+# el algoritmo coloca nodos en la comunidad a pesar de sobrepasar h, modificación de la anterior versión
+# se completa los nodos a la cantidad de la comunidad más óptima, ej: de 11 y 12 a la comunidad de 13 nodos
