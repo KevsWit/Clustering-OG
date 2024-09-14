@@ -7,9 +7,17 @@ from itertools import combinations
 def truss_decomposition(G):
     """Truss decomposition that returns the trussness of each edge."""
     trussness = {}
-    # Código para calcular la descomposición de truss, que actualizará 'trussness'
-    # Utiliza la función de truss decomposition de NetworkX o implementa la tuya
-    return nx.core_number(G)  # Ejemplo con core_number para simplificar
+    
+    # Calcula el k-truss para diferentes valores de k utilizando NetworkX
+    max_k = max(nx.core_number(G).values())  # Esto nos da un límite superior aproximado para k
+    
+    for k in range(2, max_k + 1):
+        k_truss_graph = nx.k_truss(G, k)
+        for edge in k_truss_graph.edges():
+            # Asegura que las aristas se almacenan como tuplas ordenadas
+            trussness[tuple(sorted(edge))] = k
+    
+    return trussness
 
 def find_cliques(S, h):
     """Encuentra cliques diversificados en el subgrafo S."""
@@ -28,29 +36,42 @@ def find_cliques(S, h):
     
     return diversified_cliques[:2]  # Retornar los top 2 cliques diversificados
 
+def node_trussness(G, trussness):
+    """Calcula el trussness de cada nodo basado en las aristas que lo conectan."""
+    node_truss = {}
+    for node in G.nodes:
+        connected_edges = list(G.edges(node))
+        if connected_edges:
+            node_truss[node] = min(trussness[tuple(sorted(edge))] for edge in connected_edges)
+        else:
+            node_truss[node] = 0  # Si no hay aristas conectadas, trussness es 0
+    return node_truss
+
 def ST_Base(G, q, l, h, trussness):
     """ST-Base heuristic algorithm."""
-    if trussness[q] > h:
+    node_truss = node_trussness(G, trussness)  # Obtener trussness por nodo
+    
+    if node_truss[q] > h:
         k_star = h
         C = {q}
     else:
         k_star = max([k for k in range(2, max(trussness.values())+1) 
-                      if len([v for v in nx.node_connected_component(G, q) if trussness[v] >= k]) >= l])
-        if len([v for v in nx.node_connected_component(G, q) if trussness[v] >= k_star]) <= h:
+                      if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k]) >= l])
+        if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star]) <= h:
             return nx.subgraph(G, nx.node_connected_component(G, q)), k_star
-        C = set([v for v in nx.node_connected_component(G, q) if trussness[v] >= k_star+1]) | {q}
+        C = set([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star+1]) | {q}
     
-    R = set([v for v in G.nodes if trussness[v] >= k_star]) - C
+    R = set([v for v in G.nodes if node_truss[v] >= k_star]) - C
     
     while len(C) < h:
-        v = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), trussness[x]))
+        v = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), node_truss[x]))
         C.add(v)
         R.remove(v)
-        R.update(set([u for u in set(G.neighbors(v)) if trussness[u] >= k_star]) - C)  # Corregido
+        R.update(set([u for u in set(G.neighbors(v)) if node_truss[u] >= k_star]) - C)
 
     H = nx.subgraph(G, C)
     k_prime = max([k for k in range(2, max(trussness.values())+1) 
-                   if len([v for v in nx.node_connected_component(H, q) if trussness[v] >= k]) >= l])
+                   if len([v for v in nx.node_connected_component(H, q) if node_truss[v] >= k]) >= l])
     
     return H, k_prime
 
@@ -85,14 +106,22 @@ def ST_Heu(G, q, l, h, trussness):
 
 def BranchCheck(C, R, G, l, h, k_prime, trussness):
     """BranchCheck: Budget-Cost Based Bounding."""
+    node_truss = node_trussness(G, trussness)  # Asegúrate de calcular el trussness por nodo
+    
     for u in C:
         budget_u = min(h - len(C), len(set(G.neighbors(u)) & R))
-        cost_u = max(k_prime + 1 - trussness[u], 0)
+        
+        # Calcula el trussness de nodo como el mínimo trussness de sus aristas conectadas
+        connected_edges = [tuple(sorted(edge)) for edge in G.edges(u)]
+        min_truss_u = min(trussness[edge] for edge in connected_edges if edge in trussness)
+        
+        cost_u = max(k_prime + 1 - min_truss_u, 0)
+        
         if budget_u < cost_u:
             return False
     
     b_min = min([min(h - len(C), len(set(G.neighbors(u)) & R)) for u in C])
-    c_max = max([max(k_prime + 1 - trussness[u], 0) for u in C])
+    c_max = max([max(k_prime + 1 - min_truss_u, 0) for u in C])
     
     if b_min >= 2 * c_max:
         return True
@@ -106,6 +135,7 @@ def BranchCheck(C, R, G, l, h, k_prime, trussness):
                     return False
     
     return True
+
 
 def ST_BandB(C, R, G, l, h, k_prime, trussness):
     """ST-B&B: Basic Branch and Bound algorithm."""
@@ -134,45 +164,61 @@ def ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness):
 
     if len(C) == h or (len(C) >= l and len(R) == 0):
         k_hat = max([k for k in range(2, max(trussness.values())+1) 
-                     if len([v for v in nx.node_connected_component(G, q) if trussness[v] >= k]) >= l])
+                     if len([v for v in nx.node_connected_component(G, q) 
+                             if (tuple(sorted((v, q))) in trussness and trussness[tuple(sorted((v, q)))] >= k)]) >= l])
         if k_hat > k_prime:
             k_prime = k_hat
             H = nx.subgraph(G, C)
     
     if len(C) < h and len(R) > 0 and BranchCheck(C, R, G, l, h, k_prime, trussness):
         R = {v for v in R if len(set(G.neighbors(v)) & C) + h - len(C) - 1 >= k_prime}
-        v_star = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), trussness[x]))
-        V_star = {v_star} | {u for u in set(G.neighbors(v_star)) if trussness[u] >= k_prime}
+        
+        def node_min_truss(node):
+            """Calcula el trussness mínimo de las aristas conectadas a un nodo."""
+            connected_edges = [tuple(sorted(edge)) for edge in G.edges(node)]
+            return min((trussness[edge] for edge in connected_edges if edge in trussness), default=float('inf'))
+        
+        v_star = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), node_min_truss(x)))
+        
+        V_star = {v_star} | {u for u in set(G.neighbors(v_star)) if node_min_truss(u) >= k_prime}
         if V_star:
             H = ST_BandBP(G, q, l, h, k_star, k_prime, C | V_star, R - V_star, trussness)
     
     return H if H is not None else nx.subgraph(G, C)  # Retorna H o el subgrafo actual
 
 
+
+
 def ST_Exa(G, q, l, h, trussness):
     """ST-Exa: Final exact algorithm."""
     H, k_star = ST_Heu(G, q, l, h, trussness)
-    k_prime = min([trussness[v] for v in H.nodes])
+    
+    # Calcula k_prime como el mínimo trussness de las aristas en el subgrafo H
+    k_prime = min(trussness[tuple(sorted(edge))] for edge in H.edges)
     
     if k_prime != k_star:
         C = {q}
-        R = set([v for v in G.nodes if trussness[v] >= k_prime + 1])
+        R = set(
+            v for v in G.nodes
+            if (q, v) in trussness or (v, q) in trussness and 
+               trussness[tuple(sorted((v, q)))] >= k_prime + 1
+        )
         H = ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness)
     
     return H
 
+
+
 # Ejemplo de uso
-G = nx.karate_club_graph()  # Usando un grafo de ejemplo de NetworkX
+G = nx.les_miserables_graph()  # Usando un grafo de ejemplo de NetworkX
+# print(G.nodes)
 trussness = truss_decomposition(G)
-q = 0  # Nodo de consulta
-l, h = 10, 12  # Restricciones de tamaño
+q = 'Napoleon'  # Nodo de consulta
+l, h = 2, 5  # Restricciones de tamaño
 
 H = ST_Exa(G, q, l, h, trussness)
 print("Subgrafo resultante:", H.nodes)
 
-
-# Problemas con ciertos límites
-# el algoritmo coloca nodos en la comunidad a pesar de sobrepasar h, modificación de la anterior versión
-# se completa los nodos a la cantidad de la comunidad más óptima, ej: de 11 y 12 a la comunidad de 13 nodos
-
-#Esta versión será adaptada para crear varias comunidades
+#problemas:
+# aproximación a la comunidad con cantidad de nodos más cercana
+# puede irrespetar los límites
