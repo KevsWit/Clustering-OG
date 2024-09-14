@@ -1,79 +1,171 @@
+# Original source in c++:
+# https://github.com/harrycoder17/Size-constrained-Community-Search
+
 import networkx as nx
+from itertools import combinations
 
-# Función de puntuación para evaluar candidatos
-def score(G, node, community):
-    # Número de vecinos comunes con la comunidad
-    return len(set(G.neighbors(node)).intersection(community.nodes()))
+def truss_decomposition(G):
+    """Truss decomposition that returns the trussness of each edge."""
+    trussness = {}
+    # Código para calcular la descomposición de truss, que actualizará 'trussness'
+    # Utiliza la función de truss decomposition de NetworkX o implementa la tuya
+    return nx.core_number(G)  # Ejemplo con core_number para simplificar
 
-# Algoritmo mejorado STCS para encontrar una comunidad
-def improved_stcs(G, q, l, h, visited_nodes):
-    community = nx.Graph()
-    community.add_node(q)
-    candidates = set(G.neighbors(q)) - visited_nodes
-    visited = set()
+def find_cliques(S, h):
+    """Encuentra cliques diversificados en el subgrafo S."""
+    # Encuentra todos los cliques en el subgrafo S
+    cliques = list(nx.find_cliques(S))
+    # Filtra los cliques que tienen un tamaño dentro del límite h
+    cliques = [clique for clique in cliques if len(clique) <= h]
+    # Ordenar los cliques por tamaño (puede ser un criterio de diversificación)
+    cliques.sort(key=len, reverse=True)
     
-    while len(community.nodes()) < h and candidates:
-        # Seleccionar el mejor candidato basado en la función de puntuación
-        candidate = max(candidates, key=lambda node: score(G, node, community))
-        community.add_node(candidate)
-        community.add_edges_from(
-            (candidate, neighbor) for neighbor in G.neighbors(candidate) if neighbor in community.nodes()
-        )
-        visited.add(candidate)
-        candidates.remove(candidate)
-        # Actualizar candidatos con los vecinos del candidato recién agregado
-        new_neighbors = set(G.neighbors(candidate)) - community.nodes() - visited - visited_nodes
-        candidates.update(new_neighbors)
+    # Aquí podemos aplicar una heurística para diversificar, por ejemplo:
+    diversified_cliques = []
+    for clique in cliques:
+        if not any(set(clique).issubset(set(d)) for d in diversified_cliques):
+            diversified_cliques.append(clique)
     
-    return community
+    return diversified_cliques[:2]  # Retornar los top 2 cliques diversificados
 
-# Función para encontrar todas las comunidades en el grafo
-def find_all_communities(G, l, h):
-    visited_nodes = set()
-    communities = []
-    for q in G.nodes():
-        if q not in visited_nodes:
-            community = improved_stcs(G, q, l, h, visited_nodes)
-            if len(community.nodes()) >= l:
-                communities.append(community)
-                visited_nodes.update(community.nodes())
-            else:
-                # Si la comunidad es demasiado pequeña, no se añade y el nodo queda sin asignar
-                pass
-    # Segunda pasada para asignar nodos no asignados
-    unassigned_nodes = set(G.nodes()) - visited_nodes
-    for node in unassigned_nodes:
-        # Intentar asignar el nodo a la comunidad más cercana
-        neighbor_communities = []
-        for idx, community in enumerate(communities):
-            if node in G:
-                neighbors = set(G.neighbors(node))
-                if neighbors.intersection(community.nodes()):
-                    neighbor_communities.append((idx, len(neighbors.intersection(community.nodes()))))
-        if neighbor_communities:
-            # Asignar el nodo a la comunidad con la que tiene más conexiones
-            best_community_idx = max(neighbor_communities, key=lambda x: x[1])[0]
-            best_community = communities[best_community_idx]
-            best_community.add_node(node)
-            best_community.add_edges_from(
-                (node, neighbor) for neighbor in G.neighbors(node) if neighbor in best_community.nodes()
-            )
-            visited_nodes.add(node)
-        else:
-            # Si el nodo no está conectado a ninguna comunidad, crear una nueva comunidad
-            new_community = nx.Graph()
-            new_community.add_node(node)
-            visited_nodes.add(node)
-            communities.append(new_community)
-    return communities
+def ST_Base(G, q, l, h, trussness):
+    """ST-Base heuristic algorithm."""
+    if trussness[q] > h:
+        k_star = h
+        C = {q}
+    else:
+        k_star = max([k for k in range(2, max(trussness.values())+1) 
+                      if len([v for v in nx.node_connected_component(G, q) if trussness[v] >= k]) >= l])
+        if len([v for v in nx.node_connected_component(G, q) if trussness[v] >= k_star]) <= h:
+            return nx.subgraph(G, nx.node_connected_component(G, q)), k_star
+        C = set([v for v in nx.node_connected_component(G, q) if trussness[v] >= k_star+1]) | {q}
+    
+    R = set([v for v in G.nodes if trussness[v] >= k_star]) - C
+    
+    while len(C) < h:
+        v = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), trussness[x]))
+        C.add(v)
+        R.remove(v)
+        R.update([u for u in set(G.neighbors(v)) if trussness[u] >= k_star] - C)
+    
+    H = nx.subgraph(G, C)
+    k_prime = max([k for k in range(2, max(trussness.values())+1) 
+                   if len([v for v in nx.node_connected_component(H, q) if trussness[v] >= k]) >= l])
+    
+    return H, k_prime
+
+def ST_Heu(G, q, l, h, trussness):
+    """ST-Heu: Advanced heuristic algorithm to address slow start and branch trap."""
+    H, k_star = ST_Base(G, q, l, h, trussness)
+    
+    if H.nodes != {q}:
+        return H, k_star
+    
+    D = set()
+    max_neighbors = lambda vi: len(set(G.neighbors(vi)) & set(G.neighbors(q)))
+    
+    candidates = sorted([v for v in G.nodes if v != q and trussness[v] >= k_star and v not in D], key=max_neighbors, reverse=True)
+    
+    for vi in candidates:
+        S = nx.subgraph(G, set(G.neighbors(vi)) & set(G.neighbors(q)))
+        L = find_cliques(S, h)
+        D.update(L)
+        k_prime = 0
+        
+        for L_clique in L:
+            C = {q, vi} | set(L_clique)
+            Hi, k_prime_i = ST_Base(nx.subgraph(G, C), q, l, h, trussness)
+            if k_prime_i == k_star:
+                return Hi, k_prime_i
+            elif k_prime_i > k_prime:
+                k_prime = k_prime_i
+                H = Hi
+    
+    return H, k_prime
+
+def BranchCheck(C, R, G, l, h, k_prime, trussness):
+    """BranchCheck: Budget-Cost Based Bounding."""
+    for u in C:
+        budget_u = min(h - len(C), len(set(G.neighbors(u)) & R))
+        cost_u = max(k_prime + 1 - trussness[u], 0)
+        if budget_u < cost_u:
+            return False
+    
+    b_min = min([min(h - len(C), len(set(G.neighbors(u)) & R)) for u in C])
+    c_max = max([max(k_prime + 1 - trussness[u], 0) for u in C])
+    
+    if b_min >= 2 * c_max:
+        return True
+    
+    for u in C:
+        if cost_u > 0:
+            A = set(G.neighbors(u)) & R
+            for x in C - A:
+                budget_x = min(h - len(C) - cost_u, len(set(G.neighbors(x)) & R))
+                if budget_x < cost_u:
+                    return False
+    
+    return True
+
+def ST_BandB(C, R, G, l, h, k_prime, trussness):
+    """ST-B&B: Basic Branch and Bound algorithm."""
+    if k_prime == k_star:
+        return H
+    if len(C) >= l:
+        k_hat = max([k for k in range(2, max(trussness.values())+1) 
+                     if len([v for v in nx.node_connected_component(G, q) if trussness[v] >= k]) >= l])
+        if k_hat > k_prime:
+            k_prime = k_hat
+            H = nx.subgraph(G, C)
+    
+    if len(C) < h and len(R) > 0:
+        v_star = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), trussness[x]))
+        ST_BandB(C | {v_star}, R - {v_star}, G, l, h, k_prime, trussness)
+        ST_BandB(C, R - {v_star}, G, l, h, k_prime, trussness)
+    
+    return H
+
+def ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness):
+    """ST-B&BP: Optimized Branch and Bound with Pruning."""
+    if k_prime == k_star:
+        return H
+    if len(C) == h or (len(C) >= l and len(R) == 0):
+        k_hat = max([k for k in range(2, max(trussness.values())+1) 
+                     if len([v for v in nx.node_connected_component(G, q) if trussness[v] >= k]) >= l])
+        if k_hat > k_prime:
+            k_prime = k_hat
+            H = nx.subgraph(G, C)
+    
+    if len(C) < h and len(R) > 0 and BranchCheck(C, R, G, l, h, k_prime, trussness):
+        R = {v for v in R if len(set(G.neighbors(v)) & C) + h - len(C) - 1 >= k_prime}
+        v_star = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), trussness[x]))
+        V_star = {v_star} | {u for u in set(G.neighbors(v_star)) if trussness[u] >= k_prime}
+        if not V_star:
+            return H
+        H = ST_BandBP(G, q, l, h, k_star, k_prime, C | V_star, R - V_star, trussness)
+    
+    return H
+
+def ST_Exa(G, q, l, h, trussness):
+    """ST-Exa: Final exact algorithm."""
+    H, k_star = ST_Heu(G, q, l, h, trussness)
+    k_prime = min([trussness[v] for v in H.nodes])
+    
+    if k_prime != k_star:
+        C = {q}
+        R = set([v for v in G.nodes if trussness[v] >= k_prime + 1])
+        H = ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness)
+    
+    return H
 
 # Ejemplo de uso
-G = nx.karate_club_graph()
-l = 3  # Tamaño mínimo de la comunidad
-h = 7 # Tamaño máximo de la comunidad
+G = nx.karate_club_graph()  # Usando un grafo de ejemplo de NetworkX
+trussness = truss_decomposition(G)
+q = 0  # Nodo de consulta
+l, h = 2, 12  # Restricciones de tamaño
 
-communities = find_all_communities(G, l, h)
-for idx, community in enumerate(communities):
-    print(f"Comunidad {idx+1}:")
-    print(f"  Nodos: {sorted(community.nodes())}")
-    print(f"  Número de aristas: {community.number_of_edges()}")
+H = ST_Exa(G, q, l, h, trussness)
+print("Subgrafo resultante:", H.nodes)
+
+# Problemas con ciertos límites
+# h menor a 10; h igual a 11 y 12
