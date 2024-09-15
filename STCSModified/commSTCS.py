@@ -266,4 +266,4 @@ for i, cluster in enumerate(clusters):
     print(f"Cluster {i + 1}: {cluster.nodes}")
 
 #problemas:
-# se repiten nodos en varios clusters (por mejorar)
+# se repiten nodos en varios clusters (por corregir)
