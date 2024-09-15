@@ -162,13 +162,20 @@ def ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness):
     if k_prime == k_star:
         return nx.subgraph(G, C)  # Retorna el subgrafo actual si es óptimo
 
-    if len(C) == h or (len(C) >= l and len(R) == 0):
-        k_hat = max([k for k in range(2, max(trussness.values())+1) 
-                     if len([v for v in nx.node_connected_component(G, q) 
-                             if (tuple(sorted((v, q))) in trussness and trussness[tuple(sorted((v, q)))] >= k)]) >= l])
+    # Asegurarse de que k_hat solo se calcule si hay valores posibles
+    k_values = [
+        k for k in range(2, max(trussness.values()) + 1)
+        if len([v for v in nx.node_connected_component(G, q)
+                if (tuple(sorted((v, q))) in trussness and trussness[tuple(sorted((v, q)))] >= k)]) >= l
+    ]
+
+    if k_values:  # Verifica si la lista no está vacía
+        k_hat = max(k_values)
         if k_hat > k_prime:
             k_prime = k_hat
             H = nx.subgraph(G, C)
+    else:
+        k_hat = None  # O algún valor predeterminado si la lista está vacía
     
     if len(C) < h and len(R) > 0 and BranchCheck(C, R, G, l, h, k_prime, trussness):
         R = {v for v in R if len(set(G.neighbors(v)) & C) + h - len(C) - 1 >= k_prime}
@@ -185,6 +192,7 @@ def ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness):
             H = ST_BandBP(G, q, l, h, k_star, k_prime, C | V_star, R - V_star, trussness)
     
     return H if H is not None else nx.subgraph(G, C)  # Retorna H o el subgrafo actual
+
 
 
 
@@ -207,18 +215,36 @@ def ST_Exa(G, q, l, h, trussness):
     
     return H
 
+def multi_cluster_STCS(G, l, h, trussness):
+    """Genera múltiples clusters utilizando el algoritmo STCS."""
+    all_clusters = []
+    assigned_nodes = set()  # Para llevar un registro de los nodos ya asignados a un cluster
 
+    for q in G.nodes:
+        if q not in assigned_nodes:
+            # Ejecuta ST_Exa para el nodo q que aún no está asignado
+            H = ST_Exa(G, q, l, h, trussness)
+            
+            # Verifica si el cluster cumple con las restricciones de tamaño
+            if l <= len(H.nodes) <= h:
+                # Añadir los nodos del cluster H a la lista de nodos asignados
+                assigned_nodes.update(H.nodes)
+                
+                # Añadir el subgrafo H a la lista de clusters
+                all_clusters.append(H)
+    
+    return all_clusters
 
 # Ejemplo de uso
 G = nx.les_miserables_graph()  # Usando un grafo de ejemplo de NetworkX
-# print(G.nodes)
 trussness = truss_decomposition(G)
-q = 'Napoleon'  # Nodo de consulta
-l, h = 2, 5  # Restricciones de tamaño
+l, h = 5, 15  # Restricciones de tamaño
 
-H = ST_Exa(G, q, l, h, trussness)
-print("Subgrafo resultante:", H.nodes)
+clusters = multi_cluster_STCS(G, l, h, trussness)
+
+# Mostrar los clusters
+for i, cluster in enumerate(clusters):
+    print(f"Cluster {i + 1}: {cluster.nodes}")
 
 #problemas:
-# aproximación a la comunidad con cantidad de nodos más cercana
-# puede irrespetar los límites
+# se repiten nodos en varios clusters (por mejorar)
