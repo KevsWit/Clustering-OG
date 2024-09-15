@@ -55,11 +55,20 @@ def ST_Base(G, q, l, h, trussness):
         k_star = h
         C = {q}
     else:
-        k_star = max([k for k in range(2, max(trussness.values())+1) 
-                      if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k]) >= l])
+        k_values = [
+            k for k in range(2, max(trussness.values()) + 1) 
+            if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k]) >= l
+        ]
+        
+        if k_values:  # Verifica si la lista no está vacía
+            k_star = max(k_values)
+        else:
+            k_star = 2  # Asignar un valor predeterminado, por ejemplo, el mínimo k posible
+
         if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star]) <= h:
             return nx.subgraph(G, nx.node_connected_component(G, q)), k_star
-        C = set([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star+1]) | {q}
+        
+        C = set([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star + 1]) | {q}
     
     R = set([v for v in G.nodes if node_truss[v] >= k_star]) - C
     
@@ -70,10 +79,20 @@ def ST_Base(G, q, l, h, trussness):
         R.update(set([u for u in set(G.neighbors(v)) if node_truss[u] >= k_star]) - C)
 
     H = nx.subgraph(G, C)
-    k_prime = max([k for k in range(2, max(trussness.values())+1) 
-                   if len([v for v in nx.node_connected_component(H, q) if node_truss[v] >= k]) >= l])
     
+    k_prime_values = [
+        k for k in range(2, max(trussness.values()) + 1) 
+        if len([v for v in nx.node_connected_component(H, q) if node_truss[v] >= k]) >= l
+    ]
+    
+    if k_prime_values:
+        k_prime = max(k_prime_values)
+    else:
+        k_prime = 2  # Asignar un valor predeterminado si la lista está vacía
+
     return H, k_prime
+
+
 
 def ST_Heu(G, q, l, h, trussness):
     """ST-Heu: Advanced heuristic algorithm to address slow start and branch trap."""
@@ -236,9 +255,9 @@ def multi_cluster_STCS(G, l, h, trussness):
     return all_clusters
 
 # Ejemplo de uso
-G = nx.les_miserables_graph()  # Usando un grafo de ejemplo de NetworkX
+G = nx.karate_club_graph()  # Usando un grafo de ejemplo de NetworkX
 trussness = truss_decomposition(G)
-l, h = 5, 15  # Restricciones de tamaño
+l, h = 3,7   # Restricciones de tamaño
 
 clusters = multi_cluster_STCS(G, l, h, trussness)
 
