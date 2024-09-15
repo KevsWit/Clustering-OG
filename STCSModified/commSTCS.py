@@ -244,13 +244,17 @@ def multi_cluster_STCS(G, l, h, trussness):
             # Ejecuta ST_Exa para el nodo q que aún no está asignado
             H = ST_Exa(G, q, l, h, trussness)
             
-            # Verifica si el cluster cumple con las restricciones de tamaño
-            if l <= len(H.nodes) <= h:
-                # Añadir los nodos del cluster H a la lista de nodos asignados
-                assigned_nodes.update(H.nodes)
+            # Filtrar solo los nodos no asignados para el cluster
+            H_nodes_filtered = [n for n in H.nodes if n not in assigned_nodes]
+            
+            # Verifica si el cluster cumple con las restricciones de tamaño después de filtrar
+            if l <= len(H_nodes_filtered) <= h:
+                # Añadir los nodos del cluster filtrado a la lista de nodos asignados
+                assigned_nodes.update(H_nodes_filtered)
                 
-                # Añadir el subgrafo H a la lista de clusters
-                all_clusters.append(H)
+                # Crear un subgrafo con los nodos filtrados y añadirlo a la lista de clusters
+                H_filtered = G.subgraph(H_nodes_filtered)
+                all_clusters.append(H_filtered)
     
     return all_clusters
 
