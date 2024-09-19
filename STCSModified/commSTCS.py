@@ -1,40 +1,47 @@
-# Original source in c++:
-# https://github.com/harrycoder17/Size-constrained-Community-Search
-
 import networkx as nx
 from itertools import combinations
+import matplotlib.pyplot as plt
+
+def visualize_clusters(G, clusters):
+    pos = nx.spring_layout(G)  # Layout para los nodos
+    cmap = plt.get_cmap('viridis')  # Colormap para los colores
+
+    # Asignar un color único a cada cluster
+    for i, cluster in enumerate(clusters):
+        color = cmap(i / len(clusters))
+        nx.draw_networkx_nodes(G, pos, nodelist=list(cluster.nodes), node_size=300, node_color=[color] * len(cluster.nodes))
+
+    # Dibujar aristas y etiquetas
+    nx.draw_networkx_edges(G, pos, alpha=0.5)
+    nx.draw_networkx_labels(G, pos)
+
+    plt.show()
 
 def truss_decomposition(G):
     """Truss decomposition that returns the trussness of each edge."""
     trussness = {}
     
-    # Calcula el k-truss para diferentes valores de k utilizando NetworkX
-    max_k = max(nx.core_number(G).values())  # Esto nos da un límite superior aproximado para k
+    max_k = max(nx.core_number(G).values())
     
     for k in range(2, max_k + 1):
         k_truss_graph = nx.k_truss(G, k)
         for edge in k_truss_graph.edges():
-            # Asegura que las aristas se almacenan como tuplas ordenadas
             trussness[tuple(sorted(edge))] = k
     
     return trussness
 
 def find_cliques(S, h):
     """Encuentra cliques diversificados en el subgrafo S."""
-    # Encuentra todos los cliques en el subgrafo S
     cliques = list(nx.find_cliques(S))
-    # Filtra los cliques que tienen un tamaño dentro del límite h
     cliques = [clique for clique in cliques if len(clique) <= h]
-    # Ordenar los cliques por tamaño (puede ser un criterio de diversificación)
     cliques.sort(key=len, reverse=True)
     
-    # Aquí podemos aplicar una heurística para diversificar, por ejemplo:
     diversified_cliques = []
     for clique in cliques:
         if not any(set(clique).issubset(set(d)) for d in diversified_cliques):
             diversified_cliques.append(clique)
     
-    return diversified_cliques[:2]  # Retornar los top 2 cliques diversificados
+    return diversified_cliques[:2]
 
 def node_trussness(G, trussness):
     """Calcula el trussness de cada nodo basado en las aristas que lo conectan."""
@@ -44,12 +51,12 @@ def node_trussness(G, trussness):
         if connected_edges:
             node_truss[node] = min(trussness[tuple(sorted(edge))] for edge in connected_edges)
         else:
-            node_truss[node] = 0  # Si no hay aristas conectadas, trussness es 0
+            node_truss[node] = 0
     return node_truss
 
 def ST_Base(G, q, l, h, trussness):
     """ST-Base heuristic algorithm."""
-    node_truss = node_trussness(G, trussness)  # Obtener trussness por nodo
+    node_truss = node_trussness(G, trussness)
     
     if node_truss[q] > h:
         k_star = h
@@ -60,10 +67,10 @@ def ST_Base(G, q, l, h, trussness):
             if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k]) >= l
         ]
         
-        if k_values:  # Verifica si la lista no está vacía
+        if k_values:
             k_star = max(k_values)
         else:
-            k_star = 2  # Asignar un valor predeterminado, por ejemplo, el mínimo k posible
+            k_star = 2
 
         if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star]) <= h:
             return nx.subgraph(G, nx.node_connected_component(G, q)), k_star
@@ -88,11 +95,9 @@ def ST_Base(G, q, l, h, trussness):
     if k_prime_values:
         k_prime = max(k_prime_values)
     else:
-        k_prime = 2  # Asignar un valor predeterminado si la lista está vacía
+        k_prime = 2
 
     return H, k_prime
-
-
 
 def ST_Heu(G, q, l, h, trussness):
     """ST-Heu: Advanced heuristic algorithm to address slow start and branch trap."""
@@ -125,15 +130,12 @@ def ST_Heu(G, q, l, h, trussness):
 
 def BranchCheck(C, R, G, l, h, k_prime, trussness):
     """BranchCheck: Budget-Cost Based Bounding."""
-    node_truss = node_trussness(G, trussness)  # Asegúrate de calcular el trussness por nodo
+    node_truss = node_trussness(G, trussness)
     
     for u in C:
         budget_u = min(h - len(C), len(set(G.neighbors(u)) & R))
-        
-        # Calcula el trussness de nodo como el mínimo trussness de sus aristas conectadas
         connected_edges = [tuple(sorted(edge)) for edge in G.edges(u)]
         min_truss_u = min(trussness[edge] for edge in connected_edges if edge in trussness)
-        
         cost_u = max(k_prime + 1 - min_truss_u, 0)
         
         if budget_u < cost_u:
@@ -155,13 +157,12 @@ def BranchCheck(C, R, G, l, h, k_prime, trussness):
     
     return True
 
-
 def ST_BandB(C, R, G, l, h, k_prime, trussness):
     """ST-B&B: Basic Branch and Bound algorithm."""
     if k_prime == k_star:
         return H
     if len(C) >= l:
-        k_hat = max([k for k in range(2, max(trussness.values())+1) 
+        k_hat = max([k for k in range(2, max(trussness.values()) + 1) 
                      if len([v for v in nx.node_connected_component(G, q) if trussness[v] >= k]) >= l])
         if k_hat > k_prime:
             k_prime = k_hat
@@ -176,51 +177,45 @@ def ST_BandB(C, R, G, l, h, k_prime, trussness):
 
 def ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness):
     """ST-B&BP: Optimized Branch and Bound with Pruning."""
-    H = None  # Inicializamos H como None para evitar UnboundLocalError
+    H = None
     
     if k_prime == k_star:
-        return nx.subgraph(G, C)  # Retorna el subgrafo actual si es óptimo
+        return nx.subgraph(G, C)
 
-    # Asegurarse de que k_hat solo se calcule si hay valores posibles
     k_values = [
         k for k in range(2, max(trussness.values()) + 1)
         if len([v for v in nx.node_connected_component(G, q)
                 if (tuple(sorted((v, q))) in trussness and trussness[tuple(sorted((v, q)))] >= k)]) >= l
     ]
 
-    if k_values:  # Verifica si la lista no está vacía
+    if k_values:
         k_hat = max(k_values)
         if k_hat > k_prime:
             k_prime = k_hat
             H = nx.subgraph(G, C)
     else:
-        k_hat = None  # O algún valor predeterminado si la lista está vacía
+        k_hat = None
     
     if len(C) < h and len(R) > 0 and BranchCheck(C, R, G, l, h, k_prime, trussness):
         R = {v for v in R if len(set(G.neighbors(v)) & C) + h - len(C) - 1 >= k_prime}
         
         def node_min_truss(node):
-            """Calcula el trussness mínimo de las aristas conectadas a un nodo."""
             connected_edges = [tuple(sorted(edge)) for edge in G.edges(node)]
             return min((trussness[edge] for edge in connected_edges if edge in trussness), default=float('inf'))
+
+        if R:  # Verificamos si R no está vacío antes de usar max
+            v_star = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), node_min_truss(x)))
         
-        v_star = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), node_min_truss(x)))
-        
-        V_star = {v_star} | {u for u in set(G.neighbors(v_star)) if node_min_truss(u) >= k_prime}
-        if V_star:
-            H = ST_BandBP(G, q, l, h, k_star, k_prime, C | V_star, R - V_star, trussness)
+            V_star = {v_star} | {u for u in set(G.neighbors(v_star)) if node_min_truss(u) >= k_prime}
+            if V_star:
+                H = ST_BandBP(G, q, l, h, k_star, k_prime, C | V_star, R - V_star, trussness)
     
-    return H if H is not None else nx.subgraph(G, C)  # Retorna H o el subgrafo actual
-
-
-
+    return H if H is not None else nx.subgraph(G, C)
 
 
 def ST_Exa(G, q, l, h, trussness):
     """ST-Exa: Final exact algorithm."""
     H, k_star = ST_Heu(G, q, l, h, trussness)
-    
-    # Calcula k_prime como el mínimo trussness de las aristas en el subgrafo H
     k_prime = min(trussness[tuple(sorted(edge))] for edge in H.edges)
     
     if k_prime != k_star:
@@ -234,34 +229,100 @@ def ST_Exa(G, q, l, h, trussness):
     
     return H
 
+def combine_small_clusters(clusters, l, h):
+    """Combina clusters pequeños para cumplir con las restricciones de tamaño."""
+    combined_clusters = []
+    remaining_clusters = []
+
+    for cluster in clusters:
+        if len(cluster) < l:
+            remaining_clusters.append(cluster)
+        else:
+            combined_clusters.append(cluster)
+
+    while remaining_clusters:
+        cluster_to_combine = remaining_clusters.pop(0)
+        for i, cluster in enumerate(remaining_clusters):
+            combined_cluster = cluster_to_combine.union(cluster)
+            if l <= len(combined_cluster) <= h:
+                remaining_clusters.pop(i)
+                combined_clusters.append(combined_cluster)
+                break
+        else:
+            combined_clusters.append(cluster_to_combine)
+
+    return combined_clusters
+
+def split_large_clusters(clusters, h):
+    """Divide clusters grandes en subclusters más pequeños que respeten el tamaño máximo permitido."""
+    new_clusters = []
+    
+    for cluster in clusters:
+        nodes = list(cluster)
+        while len(nodes) > h:
+            new_clusters.append(nodes[:h])
+            nodes = nodes[h:]
+        if nodes:
+            new_clusters.append(nodes)
+    
+    return [set(cluster) for cluster in new_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
+
+def assign_unclustered_nodes(G, all_clusters, l, h):
+    """Asigna nodos que no pertenecen a ningún cluster existente o crea nuevos clusters si es necesario."""
+    all_clustered_nodes = set.union(*[set(cluster) for cluster in all_clusters])
+    unclustered_nodes = set(G.nodes) - all_clustered_nodes
+    
+    for node in unclustered_nodes:
+        # Intentar asignar el nodo a un cluster existente
+        assigned = False
+        for cluster in all_clusters:
+            if len(cluster) < h:
+                cluster.add(node)
+                assigned = True
+                break
+        
+        # Si no se pudo asignar, crear un nuevo cluster
+        if not assigned:
+            all_clusters.append({node})
+    
+    # Combina clusters pequeños si es necesario
+    combined_clusters = combine_small_clusters(all_clusters, l, h)
+    return combined_clusters
+
 def multi_cluster_STCS(G, l, h, trussness):
-    """Genera múltiples clusters utilizando el algoritmo STCS."""
+    """Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño."""
     all_clusters = []
-    assigned_nodes = set()  # Para llevar un registro de los nodos ya asignados a un cluster
+    assigned_nodes = set()
 
     for q in G.nodes:
         if q not in assigned_nodes:
-            # Ejecuta ST_Exa para el nodo q que aún no está asignado
             H = ST_Exa(G, q, l, h, trussness)
+            H_nodes_filtered = {n for n in H.nodes if n not in assigned_nodes}
             
-            # Filtrar solo los nodos no asignados para el cluster
-            H_nodes_filtered = [n for n in H.nodes if n not in assigned_nodes]
-            
-            # Verifica si el cluster cumple con las restricciones de tamaño después de filtrar
-            if l <= len(H_nodes_filtered) <= h:
-                # Añadir los nodos del cluster filtrado a la lista de nodos asignados
+            if len(H_nodes_filtered) >= l:
                 assigned_nodes.update(H_nodes_filtered)
-                
-                # Crear un subgrafo con los nodos filtrados y añadirlo a la lista de clusters
-                H_filtered = G.subgraph(H_nodes_filtered)
-                all_clusters.append(H_filtered)
+                all_clusters.append(H_nodes_filtered)
     
-    return all_clusters
+    # Combina clusters pequeños
+    combined_clusters = combine_small_clusters(all_clusters, l, h)
+    
+    # Divide clusters grandes
+    final_clusters = []
+    for cluster in combined_clusters:
+        final_clusters.extend(split_large_clusters([cluster], h))
+    
+    # Asigna nodos no clusterizados
+    final_clusters = assign_unclustered_nodes(G, final_clusters, l, h)
+    
+    # Convertimos de nuevo a subgrafos
+    final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
+
+    return final_clusters
 
 # Ejemplo de uso
-G = nx.karate_club_graph()  # Usando un grafo de ejemplo de NetworkX
+G = nx.les_miserables_graph()  # Usando un grafo de ejemplo de NetworkX
 trussness = truss_decomposition(G)
-l, h = 3,7   # Restricciones de tamaño
+l, h = 3, 7  # Restricciones de tamaño
 
 clusters = multi_cluster_STCS(G, l, h, trussness)
 
@@ -269,5 +330,10 @@ clusters = multi_cluster_STCS(G, l, h, trussness)
 for i, cluster in enumerate(clusters):
     print(f"Cluster {i + 1}: {cluster.nodes}")
 
-#problemas:
-# se repiten nodos en varios clusters (por corregir)
+# Dibujar el grafo con las comunidades detectadas
+visualize_clusters(G, clusters)
+
+# 
+# Observaciones:
+# - Mejorar la asignación de nodos a los clusters
+# - Técnicas revisadas para poder clusterizar usando como base STCS: clusters desbalanceados y overlapping
