@@ -267,6 +267,28 @@ def split_large_clusters(clusters, h):
     
     return [set(cluster) for cluster in new_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
 
+def assign_unclustered_nodes(G, all_clusters, l, h):
+    """Asigna nodos que no pertenecen a ningún cluster existente o crea nuevos clusters si es necesario."""
+    all_clustered_nodes = set.union(*[set(cluster) for cluster in all_clusters])
+    unclustered_nodes = set(G.nodes) - all_clustered_nodes
+    
+    for node in unclustered_nodes:
+        # Intentar asignar el nodo a un cluster existente
+        assigned = False
+        for cluster in all_clusters:
+            if len(cluster) < h:
+                cluster.add(node)
+                assigned = True
+                break
+        
+        # Si no se pudo asignar, crear un nuevo cluster
+        if not assigned:
+            all_clusters.append({node})
+    
+    # Combina clusters pequeños si es necesario
+    combined_clusters = combine_small_clusters(all_clusters, l, h)
+    return combined_clusters
+
 def multi_cluster_STCS(G, l, h, trussness):
     """Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño."""
     all_clusters = []
@@ -289,6 +311,9 @@ def multi_cluster_STCS(G, l, h, trussness):
     for cluster in combined_clusters:
         final_clusters.extend(split_large_clusters([cluster], h))
     
+    # Asigna nodos no clusterizados
+    final_clusters = assign_unclustered_nodes(G, final_clusters, l, h)
+    
     # Convertimos de nuevo a subgrafos
     final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
 
@@ -308,6 +333,7 @@ for i, cluster in enumerate(clusters):
 # Dibujar el grafo con las comunidades detectadas
 visualize_clusters(G, clusters)
 
+# 
 # Observaciones:
-# - varios nodos sin cluster
-# - posible mejor clusterización de ciertos nodos
+# - Mejorar la asignación de nodos a los clusters
+# - Técnicas revisadas para poder clusterizar usando como base STCS: clusters desbalanceados y overlapping
