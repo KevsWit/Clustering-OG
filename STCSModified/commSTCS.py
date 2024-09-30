@@ -1,6 +1,7 @@
 import networkx as nx
 from itertools import combinations
 import matplotlib.pyplot as plt
+from sklearn.metrics import normalized_mutual_info_score
 
 def visualize_clusters(G, clusters):
     pos = nx.spring_layout(G)  # Layout para los nodos
@@ -319,20 +320,45 @@ def multi_cluster_STCS(G, l, h, trussness):
 
     return final_clusters
 
-# Ejemplo de uso
-G = nx.les_miserables_graph()  # Usando un grafo de ejemplo de NetworkX
-trussness = truss_decomposition(G)
-l, h = 3, 7  # Restricciones de tamaño
+# # Ejemplo de uso
+# G = nx.les_miserables_graph()  # Usando un grafo de ejemplo de NetworkX
+# trussness = truss_decomposition(G)
+# l, h = 3, 7  # Restricciones de tamaño
 
+# clusters = multi_cluster_STCS(G, l, h, trussness)
+
+# # Mostrar los clusters
+# for i, cluster in enumerate(clusters):
+#     print(f"Cluster {i + 1}: {cluster.nodes}")
+
+# # Dibujar el grafo con las comunidades detectadas
+# visualize_clusters(G, clusters)
+
+# Load the Karate Club graph
+G = nx.karate_club_graph()
+
+# Ground truth labels (two communities in Karate Club graph)
+ground_truth_labels = [0 if G.nodes[i]['club'] == 'Mr. Hi' else 1 for i in G.nodes]
+
+# Run your clustering algorithm
+trussness = truss_decomposition(G)
+l, h = 3, 12  # Adjust your size constraints
 clusters = multi_cluster_STCS(G, l, h, trussness)
 
-# Mostrar los clusters
+# Assign each node to a cluster ID
+node_to_cluster = {}
 for i, cluster in enumerate(clusters):
-    print(f"Cluster {i + 1}: {cluster.nodes}")
+    for node in cluster.nodes:
+        node_to_cluster[node] = i
 
-# Dibujar el grafo con las comunidades detectadas
+# Predicted labels
+predicted_labels = [node_to_cluster[node] for node in G.nodes()]
+
+# Compute NMI between ground truth and predicted clusters
+nmi = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"NMI: {nmi}")
+
 visualize_clusters(G, clusters)
-
 # 
 # Observaciones:
 # - Mejorar la asignación de nodos a los clusters
