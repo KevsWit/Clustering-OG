@@ -4,15 +4,15 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import normalized_mutual_info_score
 
 def visualize_clusters(G, clusters):
-    pos = nx.spring_layout(G)  # Layout para los nodos
-    cmap = plt.get_cmap('viridis')  # Colormap para los colores
+    pos = nx.spring_layout(G)  # Layout for nodes
+    cmap = plt.get_cmap('viridis')  # Colormap for colors
 
-    # Asignar un color único a cada cluster
+    # Assign a unique color to each cluster
     for i, cluster in enumerate(clusters):
         color = cmap(i / len(clusters))
-        nx.draw_networkx_nodes(G, pos, nodelist=list(cluster.nodes), node_size=300, node_color=[color] * len(cluster.nodes))
+        nx.draw_networkx_nodes(G, pos, nodelist=list(cluster), node_size=300, node_color=[color] * len(cluster))
 
-    # Dibujar aristas y etiquetas
+    # Draw edges and labels
     nx.draw_networkx_edges(G, pos, alpha=0.5)
     nx.draw_networkx_labels(G, pos)
 
@@ -55,10 +55,58 @@ def node_trussness(G, trussness):
             node_truss[node] = 0
     return node_truss
 
+# def ST_Base(G, q, l, h, trussness):
+#     """ST-Base heuristic algorithm."""
+#     node_truss = node_trussness(G, trussness)
+    
+#     if node_truss[q] > h:
+#         k_star = h
+#         C = {q}
+#     else:
+#         k_values = [
+#             k for k in range(2, max(trussness.values()) + 1) 
+#             if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k]) >= l
+#         ]
+        
+#         if k_values:
+#             k_star = max(k_values)
+#         else:
+#             k_star = 2
+
+#         if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star]) <= h:
+#             return nx.subgraph(G, nx.node_connected_component(G, q)), k_star
+        
+#         C = set([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star + 1]) | {q}
+    
+#     R = set([v for v in G.nodes if node_truss[v] >= k_star]) - C
+    
+#     while len(C) < h:
+#         v = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), node_truss[x]))
+#         C.add(v)
+#         R.remove(v)
+#         R.update(set([u for u in set(G.neighbors(v)) if node_truss[u] >= k_star]) - C)
+
+#     H = nx.subgraph(G, C)
+    
+#     k_prime_values = [
+#         k for k in range(2, max(trussness.values()) + 1) 
+#         if len([v for v in nx.node_connected_component(H, q) if node_truss[v] >= k]) >= l
+#     ]
+    
+#     if k_prime_values:
+#         k_prime = max(k_prime_values)
+#     else:
+#         k_prime = 2
+
+#     return H, k_prime
+
 def ST_Base(G, q, l, h, trussness):
     """ST-Base heuristic algorithm."""
     node_truss = node_trussness(G, trussness)
     
+    if not trussness:  # Check if trussness is empty
+        return nx.subgraph(G, []), 2  # Return an empty subgraph and k_star=2 (default value)
+
     if node_truss[q] > h:
         k_star = h
         C = {q}
@@ -99,6 +147,7 @@ def ST_Base(G, q, l, h, trussness):
         k_prime = 2
 
     return H, k_prime
+
 
 def ST_Heu(G, q, l, h, trussness):
     """ST-Heu: Advanced heuristic algorithm to address slow start and branch trap."""
@@ -214,10 +263,29 @@ def ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness):
     return H if H is not None else nx.subgraph(G, C)
 
 
+# def ST_Exa(G, q, l, h, trussness):
+#     """ST-Exa: Final exact algorithm."""
+#     H, k_star = ST_Heu(G, q, l, h, trussness)
+#     k_prime = min(trussness[tuple(sorted(edge))] for edge in H.edges)
+    
+#     if k_prime != k_star:
+#         C = {q}
+#         R = set(
+#             v for v in G.nodes
+#             if (q, v) in trussness or (v, q) in trussness and 
+#                trussness[tuple(sorted((v, q)))] >= k_prime + 1
+#         )
+#         H = ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness)
+    
+#     return H
+
 def ST_Exa(G, q, l, h, trussness):
     """ST-Exa: Final exact algorithm."""
     H, k_star = ST_Heu(G, q, l, h, trussness)
-    k_prime = min(trussness[tuple(sorted(edge))] for edge in H.edges)
+    if H.edges:
+        k_prime = min(trussness[tuple(sorted(edge))] for edge in H.edges)
+    else:
+        k_prime = k_star  # Or some other default value
     
     if k_prime != k_star:
         C = {q}
@@ -226,9 +294,11 @@ def ST_Exa(G, q, l, h, trussness):
             if (q, v) in trussness or (v, q) in trussness and 
                trussness[tuple(sorted((v, q)))] >= k_prime + 1
         )
-        H = ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness)
+        if R:
+            H = ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness)
     
     return H
+
 
 def combine_small_clusters(clusters, l, h):
     """Combina clusters pequeños para cumplir con las restricciones de tamaño."""
@@ -294,30 +364,45 @@ def multi_cluster_STCS(G, l, h, trussness):
     """Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño."""
     all_clusters = []
     assigned_nodes = set()
-
-    for q in G.nodes:
+    din_G = G.copy()  # Hacemos una copia del grafo original
+    list_of_q=[]
+    for q in G.nodes:  # Convertimos a lista para evitar problemas de modificación durante la iteración
         if q not in assigned_nodes:
-            H = ST_Exa(G, q, l, h, trussness)
+            list_of_q.append(q)
+            trussness = truss_decomposition(din_G)
+            H = ST_Exa(din_G, q, l, h, trussness)
             H_nodes_filtered = {n for n in H.nodes if n not in assigned_nodes}
-            
+
             if len(H_nodes_filtered) >= l:
                 assigned_nodes.update(H_nodes_filtered)
                 all_clusters.append(H_nodes_filtered)
+                
+                # Actualizamos din_G eliminando los nodos asignados
+                din_G.remove_nodes_from(H_nodes_filtered)
+    # for q in G.nodes:
+    #     if q not in assigned_nodes:
+    #         H = ST_Exa(G, q, l, h, trussness)
+    #         H_nodes_filtered = {n for n in H.nodes if n not in assigned_nodes}
+            
+    #         if len(H_nodes_filtered) >= l:
+    #             assigned_nodes.update(H_nodes_filtered)
+    #             all_clusters.append(H_nodes_filtered)
     
-    # Combina clusters pequeños
-    combined_clusters = combine_small_clusters(all_clusters, l, h)
+    # # Combina clusters pequeños
+    # combined_clusters = combine_small_clusters(all_clusters, l, h)
     
-    # Divide clusters grandes
-    final_clusters = []
-    for cluster in combined_clusters:
-        final_clusters.extend(split_large_clusters([cluster], h))
+    # # Divide clusters grandes
+    # final_clusters = []
+    # for cluster in combined_clusters:
+    #     final_clusters.extend(split_large_clusters([cluster], h))
     
-    # Asigna nodos no clusterizados
-    final_clusters = assign_unclustered_nodes(G, final_clusters, l, h)
+    # # Asigna nodos no clusterizados
+    # final_clusters = assign_unclustered_nodes(G, final_clusters, l, h)
     
-    # Convertimos de nuevo a subgrafos
-    final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
-
+    # # Convertimos de nuevo a subgrafos
+    # final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
+    print(list_of_q)
+    final_clusters = all_clusters
     return final_clusters
 
 # # Ejemplo de uso
@@ -342,24 +427,27 @@ ground_truth_labels = [0 if G.nodes[i]['club'] == 'Mr. Hi' else 1 for i in G.nod
 
 # Run your clustering algorithm
 trussness = truss_decomposition(G)
-l, h = 3, 12  # Adjust your size constraints
+l, h = 3, 14  # Adjust your size constraints
 clusters = multi_cluster_STCS(G, l, h, trussness)
 
 # Assign each node to a cluster ID
 node_to_cluster = {}
 for i, cluster in enumerate(clusters):
-    for node in cluster.nodes:
+    # for node in cluster.nodes:
+    #     node_to_cluster[node] = i
+    for node in cluster:
         node_to_cluster[node] = i
 
-# Predicted labels
-predicted_labels = [node_to_cluster[node] for node in G.nodes()]
 
-# Compute NMI between ground truth and predicted clusters
-nmi = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"NMI: {nmi}")
+# # Predicted labels
+# predicted_labels = [node_to_cluster[node] for node in G.nodes()]
+
+# # Compute NMI between ground truth and predicted clusters
+# nmi = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"NMI: {nmi}")
 
 visualize_clusters(G, clusters)
 # 
 # Observaciones:
-# - Mejorar la asignación de nodos a los clusters
-# - Técnicas revisadas para poder clusterizar usando como base STCS: clusters desbalanceados y overlapping
+# - Nodos sin asignar
+# - Valor de NMI 0.44 aprox
