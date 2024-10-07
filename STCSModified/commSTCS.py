@@ -2,17 +2,20 @@ import networkx as nx
 from itertools import combinations
 import matplotlib.pyplot as plt
 from sklearn.metrics import normalized_mutual_info_score
+from networkx.algorithms.cuts import conductance
+# from collections import defaultdict
+
 
 def visualize_clusters(G, clusters):
-    pos = nx.spring_layout(G)  # Layout for nodes
-    cmap = plt.get_cmap('viridis')  # Colormap for colors
+    pos = nx.spring_layout(G)  # Layout para los nodos
+    cmap = plt.get_cmap('viridis')  # Colormap para los colores
 
-    # Assign a unique color to each cluster
+    # Asignar un color único a cada cluster
     for i, cluster in enumerate(clusters):
         color = cmap(i / len(clusters))
-        nx.draw_networkx_nodes(G, pos, nodelist=list(cluster), node_size=300, node_color=[color] * len(cluster))
+        nx.draw_networkx_nodes(G, pos, nodelist=list(cluster.nodes), node_size=300, node_color=[color] * len(cluster.nodes))
 
-    # Draw edges and labels
+    # Dibujar aristas y etiquetas
     nx.draw_networkx_edges(G, pos, alpha=0.5)
     nx.draw_networkx_labels(G, pos)
 
@@ -338,37 +341,77 @@ def split_large_clusters(clusters, h):
     
     return [set(cluster) for cluster in new_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
 
+# def assign_unclustered_nodes(G, all_clusters, l, h):
+#     """Asigna nodos que no pertenecen a ningún cluster existente o crea nuevos clusters si es necesario."""
+#     all_clustered_nodes = set.union(*[set(cluster) for cluster in all_clusters])
+#     unclustered_nodes = set(G.nodes) - all_clustered_nodes
+    
+#     for node in unclustered_nodes:
+#         # Intentar asignar el nodo a un cluster existente
+#         assigned = False
+#         for cluster in all_clusters:
+#             if len(cluster) < h:
+#                 cluster.add(node)
+#                 assigned = True
+#                 break
+        
+#         # Si no se pudo asignar, crear un nuevo cluster
+#         if not assigned:
+#             all_clusters.append({node})
+    
+#     # Combina clusters pequeños si es necesario
+#     combined_clusters = combine_small_clusters(all_clusters, l, h)
+#     return combined_clusters
+
 def assign_unclustered_nodes(G, all_clusters, l, h):
-    """Asigna nodos que no pertenecen a ningún cluster existente o crea nuevos clusters si es necesario."""
+    """Assign unclustered nodes to existing clusters based on conductance and direct connection."""
     all_clustered_nodes = set.union(*[set(cluster) for cluster in all_clusters])
     unclustered_nodes = set(G.nodes) - all_clustered_nodes
-    
+
     for node in unclustered_nodes:
-        # Intentar asignar el nodo a un cluster existente
-        assigned = False
-        for cluster in all_clusters:
-            if len(cluster) < h:
-                cluster.add(node)
-                assigned = True
-                break
+        best_cluster = None
+        best_conductance = float('inf')  # Start with a high conductance (worst case)
         
-        # Si no se pudo asignar, crear un nuevo cluster
-        if not assigned:
-            all_clusters.append({node})
+        # Evaluate conductance of the node with respect to each cluster
+        for cluster in all_clusters:
+            if len(cluster) < h:  # Ensure the cluster hasn't exceeded the size limit
+                
+                # Check if the node has any neighbors in the cluster
+                neighbors_in_cluster = [neighbor for neighbor in G.neighbors(node) if neighbor in cluster]
+                if neighbors_in_cluster:  # Only consider clusters where the node has direct neighbors
+                    # Calculate conductance between the node and the cluster
+                    cond = conductance(G, cluster, {node})
+                    
+                    if cond < best_conductance:
+                        best_conductance = cond
+                        best_cluster = cluster
+
+        # Assign the node to the best connected cluster
+        if best_cluster is not None:
+            best_cluster.add(node)
+        else:
+            # If no suitable cluster is found (very rare case), assign it to a cluster with at least a direct connection
+            # We avoid creating new clusters unnecessarily, so we pick a cluster with direct neighbors.
+            for cluster in all_clusters:
+                if any(neighbor in cluster for neighbor in G.neighbors(node)):
+                    best_cluster = cluster
+                    best_cluster.add(node)
+                    break
     
-    # Combina clusters pequeños si es necesario
+    # Combine small clusters if necessary
     combined_clusters = combine_small_clusters(all_clusters, l, h)
     return combined_clusters
+
+
 
 def multi_cluster_STCS(G, l, h, trussness):
     """Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño."""
     all_clusters = []
     assigned_nodes = set()
     din_G = G.copy()  # Hacemos una copia del grafo original
-    list_of_q=[]
+
     for q in G.nodes:  # Convertimos a lista para evitar problemas de modificación durante la iteración
-        if q not in assigned_nodes:
-            list_of_q.append(q)
+        if q in din_G.nodes:
             trussness = truss_decomposition(din_G)
             H = ST_Exa(din_G, q, l, h, trussness)
             H_nodes_filtered = {n for n in H.nodes if n not in assigned_nodes}
@@ -388,21 +431,19 @@ def multi_cluster_STCS(G, l, h, trussness):
     #             assigned_nodes.update(H_nodes_filtered)
     #             all_clusters.append(H_nodes_filtered)
     
-    # # Combina clusters pequeños
-    # combined_clusters = combine_small_clusters(all_clusters, l, h)
+    # Combina clusters pequeños
+    combined_clusters = combine_small_clusters(all_clusters, l, h)
     
-    # # Divide clusters grandes
-    # final_clusters = []
-    # for cluster in combined_clusters:
-    #     final_clusters.extend(split_large_clusters([cluster], h))
+    # Divide clusters grandes
+    final_clusters = []
+    for cluster in combined_clusters:
+        final_clusters.extend(split_large_clusters([cluster], h))
     
-    # # Asigna nodos no clusterizados
-    # final_clusters = assign_unclustered_nodes(G, final_clusters, l, h)
+    # Asigna nodos no clusterizados
+    final_clusters = assign_unclustered_nodes(G, final_clusters, l, h)
     
-    # # Convertimos de nuevo a subgrafos
-    # final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
-    print(list_of_q)
-    final_clusters = all_clusters
+    # Convertimos de nuevo a subgrafos
+    final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
     return final_clusters
 
 # # Ejemplo de uso
@@ -427,27 +468,27 @@ ground_truth_labels = [0 if G.nodes[i]['club'] == 'Mr. Hi' else 1 for i in G.nod
 
 # Run your clustering algorithm
 trussness = truss_decomposition(G)
-l, h = 3, 14  # Adjust your size constraints
+l, h = 3, 12  # Adjust your size constraints
 clusters = multi_cluster_STCS(G, l, h, trussness)
 
 # Assign each node to a cluster ID
 node_to_cluster = {}
 for i, cluster in enumerate(clusters):
-    # for node in cluster.nodes:
-    #     node_to_cluster[node] = i
-    for node in cluster:
+    for node in cluster.nodes:
         node_to_cluster[node] = i
 
 
-# # Predicted labels
-# predicted_labels = [node_to_cluster[node] for node in G.nodes()]
+# Predicted labels
+predicted_labels = [node_to_cluster[node] for node in G.nodes()]
 
-# # Compute NMI between ground truth and predicted clusters
-# nmi = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
-# print(f"NMI: {nmi}")
+# Compute NMI between ground truth and predicted clusters
+nmi = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"NMI: {nmi}")
 
 visualize_clusters(G, clusters)
 # 
 # Observaciones:
-# - Nodos sin asignar
-# - Valor de NMI 0.44 aprox
+# - Mejorar el NMI (0.44 a 0.47)
+# - Asignación de nodos faltantes mediante métricas (Logrado, uso de conductance)
+# Próximos pasos:
+# - Encontrar o generar grafos para pruebas (adecuados al restringir tam)
