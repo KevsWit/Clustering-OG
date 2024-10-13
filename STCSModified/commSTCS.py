@@ -451,7 +451,7 @@ G = nx.read_gml('test\\karate.gml')
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # Set your size constraints
-l, h = 2, 18  # Adjust your size constraints as needed
+l, h = 15, 18  # Adjust your size constraints as needed
 clusters = multi_cluster_STCS(G, l, h)
 
 # Assign each node to a cluster ID
@@ -482,7 +482,7 @@ G = nx.read_gml('test\\dolphins.gml')
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # Set your size constraints
-l, h = 2, 18  # Adjust your size constraints as needed
+l, h = 12, 42  # Adjust your size constraints as needed
 clusters = multi_cluster_STCS(G, l, h)
 
 # Assign each node to a cluster ID
@@ -514,7 +514,7 @@ label_map = {'n': 0, 'c': 1, 'l': 2}
 ground_truth_labels = [label_map[G.nodes[node]['gt']] for node in G.nodes]
 
 # Set your size constraints
-l, h = 2, 18  # Adjust your size constraints as needed
+l, h = 13, 49  # Adjust your size constraints as needed
 clusters = multi_cluster_STCS(G, l, h)
 
 # Assign each node to a cluster ID
@@ -546,7 +546,7 @@ G = nx.read_gml('test\\football.gml')
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # Set your size constraints
-l, h = 2, 18  # Adjust your size constraints as needed
+l, h = 5, 13  # Adjust your size constraints as needed
 clusters = multi_cluster_STCS(G, l, h)
 
 # Assign each node to a cluster ID
