@@ -1,10 +1,9 @@
 import networkx as nx
 from itertools import combinations
 import matplotlib.pyplot as plt
-from sklearn.metrics import normalized_mutual_info_score
+from sklearn.metrics import normalized_mutual_info_score            #NMI
+from sklearn.metrics import adjusted_mutual_info_score              #AMI
 from networkx.algorithms.cuts import conductance
-# from collections import defaultdict
-
 
 def visualize_clusters(G, clusters):
     pos = nx.spring_layout(G)  # Layout para los nodos
@@ -34,6 +33,7 @@ def truss_decomposition(G):
     
     return trussness
 
+
 def find_cliques(S, h):
     """Encuentra cliques diversificados en el subgrafo S."""
     cliques = list(nx.find_cliques(S))
@@ -53,10 +53,12 @@ def node_trussness(G, trussness):
     for node in G.nodes:
         connected_edges = list(G.edges(node))
         if connected_edges:
-            node_truss[node] = min(trussness[tuple(sorted(edge))] for edge in connected_edges)
+            # Only use edges that exist in trussness, with a default value if not found
+            node_truss[node] = min(trussness.get(tuple(sorted(edge)), 2) for edge in connected_edges)
         else:
             node_truss[node] = 0
     return node_truss
+
 
 # def ST_Base(G, q, l, h, trussness):
 #     """ST-Base heuristic algorithm."""
@@ -404,7 +406,7 @@ def assign_unclustered_nodes(G, all_clusters, l, h):
 
 
 
-def multi_cluster_STCS(G, l, h, trussness):
+def multi_cluster_STCS(G, l, h):
     """Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño."""
     all_clusters = []
     assigned_nodes = set()
@@ -422,15 +424,7 @@ def multi_cluster_STCS(G, l, h, trussness):
                 
                 # Actualizamos din_G eliminando los nodos asignados
                 din_G.remove_nodes_from(H_nodes_filtered)
-    # for q in G.nodes:
-    #     if q not in assigned_nodes:
-    #         H = ST_Exa(G, q, l, h, trussness)
-    #         H_nodes_filtered = {n for n in H.nodes if n not in assigned_nodes}
-            
-    #         if len(H_nodes_filtered) >= l:
-    #             assigned_nodes.update(H_nodes_filtered)
-    #             all_clusters.append(H_nodes_filtered)
-    
+
     # Combina clusters pequeños
     combined_clusters = combine_small_clusters(all_clusters, l, h)
     
@@ -446,30 +440,19 @@ def multi_cluster_STCS(G, l, h, trussness):
     final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
     return final_clusters
 
-# # Ejemplo de uso
-# G = nx.les_miserables_graph()  # Usando un grafo de ejemplo de NetworkX
-# trussness = truss_decomposition(G)
-# l, h = 3, 7  # Restricciones de tamaño
+### Aplicacion
 
-# clusters = multi_cluster_STCS(G, l, h, trussness)
-
-# # Mostrar los clusters
-# for i, cluster in enumerate(clusters):
-#     print(f"Cluster {i + 1}: {cluster.nodes}")
-
-# # Dibujar el grafo con las comunidades detectadas
-# visualize_clusters(G, clusters)
+########################### karate
 
 # Load the Karate Club graph
-G = nx.karate_club_graph()
+G = nx.read_gml('test\\karate.gml')
 
-# Ground truth labels (two communities in Karate Club graph)
-ground_truth_labels = [0 if G.nodes[i]['club'] == 'Mr. Hi' else 1 for i in G.nodes]
+# Extract the ground truth labels from the 'gt' field in the GML file
+ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
-# Run your clustering algorithm
-trussness = truss_decomposition(G)
-l, h = 3, 12  # Adjust your size constraints
-clusters = multi_cluster_STCS(G, l, h, trussness)
+# Set your size constraints
+l, h = 2, 18  # Adjust your size constraints as needed
+clusters = multi_cluster_STCS(G, l, h)
 
 # Assign each node to a cluster ID
 node_to_cluster = {}
@@ -477,18 +460,121 @@ for i, cluster in enumerate(clusters):
     for node in cluster.nodes:
         node_to_cluster[node] = i
 
-
-# Predicted labels
-predicted_labels = [node_to_cluster[node] for node in G.nodes()]
+# Predicted labels based on the clusters
+predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
+print(predicted_labels)
+print(ground_truth_labels)
+# Compute AMI between ground truth and predicted clusters
+ami_karate = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"AMI karate: {ami_karate}")
 
 # Compute NMI between ground truth and predicted clusters
-nmi = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"NMI: {nmi}")
+nmi_karate = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"NMI karate: {nmi_karate}")
 
 visualize_clusters(G, clusters)
+
+########################### dolphins
+
+# Grafo de Dolphins
+G = nx.read_gml('test\\dolphins.gml')
+# Extract the ground truth labels from the 'gt' field in the GML file
+ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
+
+# Set your size constraints
+l, h = 2, 18  # Adjust your size constraints as needed
+clusters = multi_cluster_STCS(G, l, h)
+
+# Assign each node to a cluster ID
+node_to_cluster = {}
+for i, cluster in enumerate(clusters):
+    for node in cluster.nodes:
+        node_to_cluster[node] = i
+
+# Predicted labels based on the clusters
+predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
+print(predicted_labels)
+print(ground_truth_labels)
+# Compute AMI between ground truth and predicted clusters
+ami_dolphins = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"AMI dolphins: {ami_dolphins}")
+
+# Compute NMI between ground truth and predicted clusters
+nmi_dolphins = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"NMI dolphins: {nmi_dolphins}")
+
+visualize_clusters(G, clusters)
+
+########################### pol_books
+
+# Grafo de Political Books
+G = nx.read_gml('test\\polbooks.gml')
+# Extract the ground truth labels from the 'gt' field in the GML file
+label_map = {'n': 0, 'c': 1, 'l': 2}
+ground_truth_labels = [label_map[G.nodes[node]['gt']] for node in G.nodes]
+
+# Set your size constraints
+l, h = 2, 18  # Adjust your size constraints as needed
+clusters = multi_cluster_STCS(G, l, h)
+
+# Assign each node to a cluster ID
+node_to_cluster = {}
+for i, cluster in enumerate(clusters):
+    for node in cluster.nodes:
+        node_to_cluster[node] = i
+
+# Predicted labels based on the clusters
+predicted_labels = [node_to_cluster[node] for node in G.nodes()]
+print(predicted_labels)
+print(ground_truth_labels)
+# Compute AMI between ground truth and predicted clusters
+ami_pol_books = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"AMI pol_books: {ami_pol_books}")
+
+# Compute NMI between ground truth and predicted clusters
+nmi_pol_books = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"NMI pol_books: {nmi_pol_books}")
+
+visualize_clusters(G, clusters)
+
+
+########################### football
+
+# Grafo de Football
+G = nx.read_gml('test\\football.gml')
+# Extract the ground truth labels from the 'gt' field in the GML file
+ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
+
+# Set your size constraints
+l, h = 2, 18  # Adjust your size constraints as needed
+clusters = multi_cluster_STCS(G, l, h)
+
+# Assign each node to a cluster ID
+node_to_cluster = {}
+for i, cluster in enumerate(clusters):
+    for node in cluster.nodes:
+        node_to_cluster[node] = i
+
+# Predicted labels based on the clusters
+predicted_labels = [node_to_cluster[node] for node in G.nodes()]
+print(predicted_labels)
+print(ground_truth_labels)
+# Compute AMI between ground truth and predicted clusters
+ami_football = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"AMI football: {ami_football}")
+
+# Compute NMI between ground truth and predicted clusters
+nmi_football = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"NMI football: {nmi_football}")
+
+visualize_clusters(G, clusters)
+
+
+
+#############################################################################
 # 
 # Observaciones:
-# - Mejorar el NMI (0.44 a 0.47)
-# - Asignación de nodos faltantes mediante métricas (Logrado, uso de conductance)
+# - Cuatro grafos seleccionados para prueba: karate, dolphins, pol_books, football
 # Próximos pasos:
-# - Encontrar o generar grafos para pruebas (adecuados al restringir tam)
+# - Mejorar función assigned, implementar split and mergue
+# - Mejorar calidad algoritmo
