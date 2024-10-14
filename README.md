@@ -20,5 +20,18 @@ Por lo tanto, es necesario desarrollar algoritmos de clustering que no solo iden
 - Comprobar que el método de clustering definido cumple con la formación de grupos de tamaño fijo.
 Evaluar el algoritmo desarrollado utilizando conjuntos de datos de prueba y métricas.
 
+## _**Dependencias**_
+Librerías: networkx, matplotlib, scikit-learn, pymetis.
+
+## _**Instalación**_
+1. Instalar [Miniconda3](https://docs.anaconda.com/miniconda/) . Durante la instalación, marcar que se agregue conda al PATH.
+2. Abrir la terminal en la carpeta del proyecto y ejecutar los siguientes comandos:
+   ```sh
+   pip install networkx
+   pip install matplotlib
+   pip install scikit-learn
+   conda update conda
+   conda install conda-forge::pymetis
+    ```
 ## _**Referencias**_
 - Zhang, F., Guo, H., Ouyang, D., Yang, S., Lin, X., & Tian, Z. (2024). Size-constrained community search on large networks: An effective and efficient solution. IEEE Transactions on Knowledge and Data Engineering, 36(1), 356-371. https://doi.org/10.1109/TKDE.2023.3280483

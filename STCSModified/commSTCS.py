@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import normalized_mutual_info_score            #NMI
 from sklearn.metrics import adjusted_mutual_info_score              #AMI
 from networkx.algorithms.cuts import conductance
+import pymetis
+
 
 def visualize_clusters(G, clusters):
     pos = nx.spring_layout(G)  # Layout para los nodos
@@ -305,8 +307,8 @@ def ST_Exa(G, q, l, h, trussness):
     return H
 
 
-def combine_small_clusters(clusters, l, h):
-    """Combina clusters pequeños para cumplir con las restricciones de tamaño."""
+def combine_small_clusters(clusters, l, h, G):
+    """Combines small clusters based on similarity to form clusters within the size constraints."""
     combined_clusters = []
     remaining_clusters = []
 
@@ -317,31 +319,56 @@ def combine_small_clusters(clusters, l, h):
             combined_clusters.append(cluster)
 
     while remaining_clusters:
+        # Select a cluster to merge
         cluster_to_combine = remaining_clusters.pop(0)
+        best_merge = None
+        best_similarity = -float('inf')
+
         for i, cluster in enumerate(remaining_clusters):
-            combined_cluster = cluster_to_combine.union(cluster)
-            if l <= len(combined_cluster) <= h:
-                remaining_clusters.pop(i)
-                combined_clusters.append(combined_cluster)
-                break
+            # Calculate the similarity between clusters using the 'conductance' as a proxy for merging.
+            similarity = conductance(G, cluster_to_combine, cluster)
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_merge = i
+        
+        if best_merge is not None:
+            # Merge the two most similar clusters
+            merged_cluster = cluster_to_combine.union(remaining_clusters.pop(best_merge))
+            if l <= len(merged_cluster) <= h:
+                combined_clusters.append(merged_cluster)
         else:
             combined_clusters.append(cluster_to_combine)
 
     return combined_clusters
 
-def split_large_clusters(clusters, h):
-    """Divide clusters grandes en subclusters más pequeños que respeten el tamaño máximo permitido."""
+def split_large_clusters(clusters, h, G):
+    """Splits large clusters based on internal connectivity to form subclusters within the size constraints."""
     new_clusters = []
     
     for cluster in clusters:
-        nodes = list(cluster)
-        while len(nodes) > h:
-            new_clusters.append(nodes[:h])
-            nodes = nodes[h:]
-        if nodes:
-            new_clusters.append(nodes)
-    
-    return [set(cluster) for cluster in new_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
+        if len(cluster) > h:
+            # Split the large cluster using the internal cut strategy
+            adjacency_list = []
+            nodes = list(cluster)
+            for p in nodes:
+                adjacency_list.append([nodes.index(nei) for nei in G.neighbors(p) if nei in cluster])
+
+            # Perform the split
+            edgecuts, parts = pymetis.part_graph(2, adjacency_list)
+
+            cluster1 = set(nodes[i] for i in range(len(parts)) if parts[i] == 0)
+            cluster2 = set(nodes[i] for i in range(len(parts)) if parts[i] == 1)
+
+            if len(cluster1) > 0:
+                new_clusters.append(cluster1)
+            if len(cluster2) > 0:
+                new_clusters.append(cluster2)
+        else:
+            new_clusters.append(cluster)
+
+    return new_clusters
+
+
 
 # def assign_unclustered_nodes(G, all_clusters, l, h):
 #     """Asigna nodos que no pertenecen a ningún cluster existente o crea nuevos clusters si es necesario."""
@@ -401,9 +428,8 @@ def assign_unclustered_nodes(G, all_clusters, l, h):
                     break
     
     # Combine small clusters if necessary
-    combined_clusters = combine_small_clusters(all_clusters, l, h)
+    combined_clusters = combine_small_clusters(all_clusters, l, h, G)
     return combined_clusters
-
 
 
 def multi_cluster_STCS(G, l, h):
@@ -412,6 +438,7 @@ def multi_cluster_STCS(G, l, h):
     assigned_nodes = set()
     din_G = G.copy()  # Hacemos una copia del grafo original
 
+    # Paso 1: Generar los clusters iniciales
     for q in G.nodes:  # Convertimos a lista para evitar problemas de modificación durante la iteración
         if q in din_G.nodes:
             trussness = truss_decomposition(din_G)
@@ -425,27 +452,29 @@ def multi_cluster_STCS(G, l, h):
                 # Actualizamos din_G eliminando los nodos asignados
                 din_G.remove_nodes_from(H_nodes_filtered)
 
-    # Combina clusters pequeños
-    combined_clusters = combine_small_clusters(all_clusters, l, h)
-    
-    # Divide clusters grandes
+    # Paso 2: Asignar nodos no clusterizados a los clusters existentes
+    final_clusters = assign_unclustered_nodes(G, all_clusters, l, h)
+
+    # Paso 3: Combinar clusters pequeños
+    combined_clusters = combine_small_clusters(final_clusters, l, h, G)
+
+    # Paso 4: Dividir clusters grandes
     final_clusters = []
     for cluster in combined_clusters:
-        final_clusters.extend(split_large_clusters([cluster], h))
-    
-    # Asigna nodos no clusterizados
-    final_clusters = assign_unclustered_nodes(G, final_clusters, l, h)
-    
+        final_clusters.extend(split_large_clusters([cluster], h, G))
+
     # Convertimos de nuevo a subgrafos
     final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
+
     return final_clusters
+
 
 ### Aplicacion
 
 ########################### karate
 
 # Load the Karate Club graph
-G = nx.read_gml('test\\karate.gml')
+G = nx.read_gml('..\\test\karate.gml')
 
 # Extract the ground truth labels from the 'gt' field in the GML file
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
@@ -477,7 +506,7 @@ visualize_clusters(G, clusters)
 ########################### dolphins
 
 # Grafo de Dolphins
-G = nx.read_gml('test\\dolphins.gml')
+G = nx.read_gml('..\\test\dolphins.gml')
 # Extract the ground truth labels from the 'gt' field in the GML file
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
@@ -508,7 +537,7 @@ visualize_clusters(G, clusters)
 ########################### pol_books
 
 # Grafo de Political Books
-G = nx.read_gml('test\\polbooks.gml')
+G = nx.read_gml('..\\test\polbooks.gml')
 # Extract the ground truth labels from the 'gt' field in the GML file
 label_map = {'n': 0, 'c': 1, 'l': 2}
 ground_truth_labels = [label_map[G.nodes[node]['gt']] for node in G.nodes]
@@ -541,7 +570,7 @@ visualize_clusters(G, clusters)
 ########################### football
 
 # Grafo de Football
-G = nx.read_gml('test\\football.gml')
+G = nx.read_gml('..\\test\\football.gml')
 # Extract the ground truth labels from the 'gt' field in the GML file
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
