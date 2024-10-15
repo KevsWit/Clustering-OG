@@ -24,7 +24,7 @@ Evaluar el algoritmo desarrollado utilizando conjuntos de datos de prueba y mét
 Librerías: networkx, matplotlib, scikit-learn, pymetis.
 
 ## _**Instalación**_
-1. Instalar [Miniconda3](https://docs.anaconda.com/miniconda/) . Durante la instalación, marcar que se agregue conda al PATH.
+1. Instalar [Miniconda3](https://docs.anaconda.com/miniconda/) . Durante la instalación, marcar la opción de agregar conda al PATH.
 2. Abrir la terminal en la carpeta del proyecto y ejecutar los siguientes comandos:
    ```sh
    pip install networkx
