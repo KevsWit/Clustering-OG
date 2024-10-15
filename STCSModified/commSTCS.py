@@ -62,51 +62,6 @@ def node_trussness(G, trussness):
     return node_truss
 
 
-# def ST_Base(G, q, l, h, trussness):
-#     """ST-Base heuristic algorithm."""
-#     node_truss = node_trussness(G, trussness)
-    
-#     if node_truss[q] > h:
-#         k_star = h
-#         C = {q}
-#     else:
-#         k_values = [
-#             k for k in range(2, max(trussness.values()) + 1) 
-#             if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k]) >= l
-#         ]
-        
-#         if k_values:
-#             k_star = max(k_values)
-#         else:
-#             k_star = 2
-
-#         if len([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star]) <= h:
-#             return nx.subgraph(G, nx.node_connected_component(G, q)), k_star
-        
-#         C = set([v for v in nx.node_connected_component(G, q) if node_truss[v] >= k_star + 1]) | {q}
-    
-#     R = set([v for v in G.nodes if node_truss[v] >= k_star]) - C
-    
-#     while len(C) < h:
-#         v = max(R, key=lambda x: (len(set(G.neighbors(x)) & C), node_truss[x]))
-#         C.add(v)
-#         R.remove(v)
-#         R.update(set([u for u in set(G.neighbors(v)) if node_truss[u] >= k_star]) - C)
-
-#     H = nx.subgraph(G, C)
-    
-#     k_prime_values = [
-#         k for k in range(2, max(trussness.values()) + 1) 
-#         if len([v for v in nx.node_connected_component(H, q) if node_truss[v] >= k]) >= l
-#     ]
-    
-#     if k_prime_values:
-#         k_prime = max(k_prime_values)
-#     else:
-#         k_prime = 2
-
-#     return H, k_prime
-
 def ST_Base(G, q, l, h, trussness):
     """ST-Base heuristic algorithm."""
     node_truss = node_trussness(G, trussness)
@@ -270,22 +225,6 @@ def ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness):
     return H if H is not None else nx.subgraph(G, C)
 
 
-# def ST_Exa(G, q, l, h, trussness):
-#     """ST-Exa: Final exact algorithm."""
-#     H, k_star = ST_Heu(G, q, l, h, trussness)
-#     k_prime = min(trussness[tuple(sorted(edge))] for edge in H.edges)
-    
-#     if k_prime != k_star:
-#         C = {q}
-#         R = set(
-#             v for v in G.nodes
-#             if (q, v) in trussness or (v, q) in trussness and 
-#                trussness[tuple(sorted((v, q)))] >= k_prime + 1
-#         )
-#         H = ST_BandBP(G, q, l, h, k_star, k_prime, C, R, trussness)
-    
-#     return H
-
 def ST_Exa(G, q, l, h, trussness):
     """ST-Exa: Final exact algorithm."""
     H, k_star = ST_Heu(G, q, l, h, trussness)
@@ -432,8 +371,11 @@ def assign_unclustered_nodes(G, all_clusters, l, h):
     return combined_clusters
 
 
-def multi_cluster_STCS(G, l, h):
+def multi_cluster_STCS(G, l, h, max_iterations=5):
     """Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño."""
+    iteration = 0
+    final_clusters = []
+    
     all_clusters = []
     assigned_nodes = set()
     din_G = G.copy()  # Hacemos una copia del grafo original
@@ -448,25 +390,41 @@ def multi_cluster_STCS(G, l, h):
             if len(H_nodes_filtered) >= l:
                 assigned_nodes.update(H_nodes_filtered)
                 all_clusters.append(H_nodes_filtered)
-                
-                # Actualizamos din_G eliminando los nodos asignados
                 din_G.remove_nodes_from(H_nodes_filtered)
 
-    # Paso 2: Asignar nodos no clusterizados a los clusters existentes
-    final_clusters = assign_unclustered_nodes(G, all_clusters, l, h)
+    while iteration < max_iterations:
+        iteration += 1
 
-    # Paso 3: Combinar clusters pequeños
-    combined_clusters = combine_small_clusters(final_clusters, l, h, G)
+        # Paso 2: Combina clusters pequeños
+        combined_clusters = combine_small_clusters(all_clusters, l, h, G)
 
-    # Paso 4: Dividir clusters grandes
-    final_clusters = []
-    for cluster in combined_clusters:
-        final_clusters.extend(split_large_clusters([cluster], h, G))
+        # Paso 3: Divide clusters grandes
+        final_clusters = []
+        for cluster in combined_clusters:
+            final_clusters.extend(split_large_clusters([cluster], h, G))
 
-    # Convertimos de nuevo a subgrafos
-    final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]  # Filtrar clusters vacíos
+        # Paso 4: Asigna nodos no clusterizados
+        final_clusters = assign_unclustered_nodes(G, final_clusters, l, h)
+
+        # Paso 5: Verificar si todos los nodos están asignados a un cluster
+        all_clustered_nodes = set.union(*[set(cluster) for cluster in final_clusters])
+        unclustered_nodes = set(G.nodes()) - all_clustered_nodes
+
+        if not unclustered_nodes:
+            # Si no quedan nodos sin cluster, salimos del ciclo
+            break
+
+        print(f"Iteración {iteration}: Nodos sin cluster: {len(unclustered_nodes)}. Repitiendo combinación y partición.")
+
+    # Si después de las iteraciones quedan nodos sin asignar, retornamos el mejor esfuerzo
+    if unclustered_nodes:
+        print("Algunos nodos no fueron asignados a clusters respetando los tamaños mínimos.")
+
+    # Convertimos de nuevo a subgrafos y filtramos clusters vacíos
+    final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]
 
     return final_clusters
+
 
 
 ### Aplicacion
@@ -474,13 +432,13 @@ def multi_cluster_STCS(G, l, h):
 ########################### karate
 
 # Load the Karate Club graph
-G = nx.read_gml('..\\test\karate.gml')
+G = nx.read_gml('..\\test\\karate.gml')
 
 # Extract the ground truth labels from the 'gt' field in the GML file
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # Set your size constraints
-l, h = 15, 18  # Adjust your size constraints as needed
+l, h = 15, 19  # Adjust your size constraints as needed
 clusters = multi_cluster_STCS(G, l, h)
 
 # Assign each node to a cluster ID
@@ -506,12 +464,12 @@ visualize_clusters(G, clusters)
 ########################### dolphins
 
 # Grafo de Dolphins
-G = nx.read_gml('..\\test\dolphins.gml')
+G = nx.read_gml('..\\test\\dolphins.gml')
 # Extract the ground truth labels from the 'gt' field in the GML file
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # Set your size constraints
-l, h = 12, 42  # Adjust your size constraints as needed
+l, h = 20, 42  # Adjust your size constraints as needed
 clusters = multi_cluster_STCS(G, l, h)
 
 # Assign each node to a cluster ID
@@ -537,7 +495,7 @@ visualize_clusters(G, clusters)
 ########################### pol_books
 
 # Grafo de Political Books
-G = nx.read_gml('..\\test\polbooks.gml')
+G = nx.read_gml('..\\test\\polbooks.gml')
 # Extract the ground truth labels from the 'gt' field in the GML file
 label_map = {'n': 0, 'c': 1, 'l': 2}
 ground_truth_labels = [label_map[G.nodes[node]['gt']] for node in G.nodes]
@@ -605,5 +563,6 @@ visualize_clusters(G, clusters)
 # Observaciones:
 # - Cuatro grafos seleccionados para prueba: karate, dolphins, pol_books, football
 # Próximos pasos:
-# - Mejorar función assigned, implementar split and mergue
-# - Mejorar calidad algoritmo
+# - Mejorar función assign_unclustered_nodes
+# - Mejorar función multi_cluster_STCS
+# - Retornar mejor clusterización (AMI)
