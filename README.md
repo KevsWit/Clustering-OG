@@ -24,8 +24,21 @@ Evaluar el algoritmo desarrollado utilizando conjuntos de datos de prueba y mét
 Librerías: networkx, matplotlib, scikit-learn, pymetis.
 
 ## _**Instalación**_
-1. Instalar [Miniconda3](https://docs.anaconda.com/miniconda/) . Durante la instalación, marcar la opción de agregar conda al PATH.
-2. Abrir la terminal en la carpeta raíz del proyecto y ejecutar los siguientes comandos:
+1. Instalar [Miniconda3](https://docs.anaconda.com/miniconda/) . Durante la instalación, marcar la opción de agregar conda al PATH; instalación para sistemas Windows.
+2. Instalar Miniconda3, para sistemas Linux, usando los siguientes comandos:
+   ```sh
+   apt update -y
+   apt upgrade -y
+   wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+   bash Miniconda3-latest-Linux-x86_64.sh
+   source ~/miniconda3/bin/activate
+   conda init
+    ```
+3. Verificar la correcta instalación de Miniconda3.
+   ```sh
+   conda --version
+    ```
+4. Abrir la terminal en la carpeta raíz del proyecto y ejecutar los siguientes comandos:
    ```sh
    pip install networkx
    pip install matplotlib
@@ -33,9 +46,15 @@ Librerías: networkx, matplotlib, scikit-learn, pymetis.
    conda update conda
    conda install conda-forge::pymetis
     ```
-3. Se puede probar el algoritmo de clustering con:
+## _**Prueba del algoritmo**_
+1. Desde la carpeta raíz se puede probar, en sistemas Windows, el algoritmo de clustering con:
    ```sh
    python GClus\test.py
-   ``` 
+    ``` 
+2. Desde la carpeta raíz se puede probar, en sistemas Linux, el algoritmo de clustering con:
+   ```sh
+   python GClus/test.py
+    ``` 
+
 ## _**Referencias**_
 - Zhang, F., Guo, H., Ouyang, D., Yang, S., Lin, X., & Tian, Z. (2024). Size-constrained community search on large networks: An effective and efficient solution. IEEE Transactions on Knowledge and Data Engineering, 36(1), 356-371. https://doi.org/10.1109/TKDE.2023.3280483
