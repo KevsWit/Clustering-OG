@@ -409,9 +409,11 @@ def multi_cluster_STCS(G, l, h, max_iterations=5):
 
         print(f"Iteración {iteration}: Nodos sin cluster: {len(unclustered_nodes)}. Repitiendo combinación y partición.")
 
-    # Si después de las iteraciones quedan nodos sin asignar, retornamos el mejor esfuerzo
+    # Si después de las iteraciones quedan nodos sin asignar, se asigna cada uno a su propio cluster
     if unclustered_nodes:
-        print("Algunos nodos no fueron asignados a clusters respetando los tamaños mínimos.")
+        print("Algunos nodos no fueron asignados a clusters respetando los tamaños mínimos. Creando clusters individuales para estos nodos.")
+        for node in unclustered_nodes:
+            final_clusters.append(G.subgraph([node]))
 
     # Convertimos de nuevo a subgrafos y filtramos clusters vacíos
     final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]
