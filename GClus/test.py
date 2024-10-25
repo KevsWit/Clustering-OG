@@ -146,3 +146,41 @@ print(f"NMI football: {nmi_football}")
 
 visualize_clusters(G, clusters)
 
+
+#**************************************************************** Extras
+
+########################### football
+
+# Load the AS Internet topology graph
+as_path = os.path.join(base_path, 'as.gml')
+G = nx.read_gml(as_path)
+
+# Extract the ground truth labels from the 'gt' field in the GML file
+ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
+
+# Set your size constraints
+l, h = 1, 7118  # Adjust your size constraints as needed
+clusters = multi_cluster_STCS(G, l, h)
+
+# Assign each node to a cluster ID
+node_to_cluster = {}
+for i, cluster in enumerate(clusters):
+    for node in cluster.nodes:
+        node_to_cluster[node] = i
+
+# Predicted labels based on the clusters
+predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
+# print(predicted_labels)
+# print(ground_truth_labels)
+
+# Compute AMI between ground truth and predicted clusters
+ami_as = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"AMI AS: {ami_as}")
+
+# Compute NMI between ground truth and predicted clusters
+nmi_as = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+print(f"NMI AS: {nmi_as}")
+
+# visualize_clusters(G, clusters)
+
+
