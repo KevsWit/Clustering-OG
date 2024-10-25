@@ -149,7 +149,7 @@ visualize_clusters(G, clusters)
 
 #**************************************************************** Extras
 
-########################### football
+########################### AS topology
 
 # Load the AS Internet topology graph
 as_path = os.path.join(base_path, 'as.gml')
