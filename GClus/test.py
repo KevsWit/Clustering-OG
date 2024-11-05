@@ -19,8 +19,9 @@ G = nx.read_gml(karate_path)
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # Set your size constraints
-l, h = 15, 19  # Adjust your size constraints as needed
-clusters = multi_cluster_STCS(G, l, h)
+h_values = [7,8,7,12]  # Adjust your size constraints as needed
+delta = 0.1
+clusters = multi_cluster_STCS(G, h_values, delta)
 
 # Assign each node to a cluster ID
 node_to_cluster = {}
@@ -32,6 +33,12 @@ for i, cluster in enumerate(clusters):
 predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
 print(predicted_labels)
 print(ground_truth_labels)
+
+# Count nodes in each predicted cluster and print the results
+cluster_counts = {i + 1: len(cluster.nodes) for i, cluster in enumerate(clusters)}
+print("\nCluster sizes:")
+for cluster_id, count in cluster_counts.items():
+    print(f"Cluster {cluster_id}: {count} nodes")
 
 # Compute AMI between ground truth and predicted clusters
 ami_karate = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
@@ -45,142 +52,142 @@ visualize_clusters(G, clusters)
 
 ########################### dolphins
 
-# Load the Dolphins graph
-dolphins_path = os.path.join(base_path, 'dolphins.gml')
-G = nx.read_gml(dolphins_path)
+# # Load the Dolphins graph
+# dolphins_path = os.path.join(base_path, 'dolphins.gml')
+# G = nx.read_gml(dolphins_path)
 
-# Extract the ground truth labels from the 'gt' field in the GML file
-ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
+# # Extract the ground truth labels from the 'gt' field in the GML file
+# ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
-# Set your size constraints
-l, h = 20, 42  # Adjust your size constraints as needed
-clusters = multi_cluster_STCS(G, l, h)
+# # Set your size constraints
+# l, h = 20, 42  # Adjust your size constraints as needed
+# clusters = multi_cluster_STCS(G, l, h)
 
-# Assign each node to a cluster ID
-node_to_cluster = {}
-for i, cluster in enumerate(clusters):
-    for node in cluster.nodes:
-        node_to_cluster[node] = i
+# # Assign each node to a cluster ID
+# node_to_cluster = {}
+# for i, cluster in enumerate(clusters):
+#     for node in cluster.nodes:
+#         node_to_cluster[node] = i
 
-# Predicted labels based on the clusters
-predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
-print(predicted_labels)
-print(ground_truth_labels)
-
-# Compute AMI between ground truth and predicted clusters
-ami_dolphins = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"AMI dolphins: {ami_dolphins}")
-
-# Compute NMI between ground truth and predicted clusters
-nmi_dolphins = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"NMI dolphins: {nmi_dolphins}")
-
-visualize_clusters(G, clusters)
-
-########################### pol_books
-
-# Load the Political Books graph
-polbooks_path = os.path.join(base_path, 'polbooks.gml')
-G = nx.read_gml(polbooks_path)
-
-# Extract the ground truth labels from the 'gt' field in the GML file
-label_map = {'n': 0, 'c': 1, 'l': 2}
-ground_truth_labels = [label_map[G.nodes[node]['gt']] for node in G.nodes()]
-
-# Set your size constraints
-l, h = 13, 49  # Adjust your size constraints as needed
-clusters = multi_cluster_STCS(G, l, h)
-
-# Assign each node to a cluster ID
-node_to_cluster = {}
-for i, cluster in enumerate(clusters):
-    for node in cluster.nodes:
-        node_to_cluster[node] = i
-
-# Predicted labels based on the clusters
-predicted_labels = [node_to_cluster[node] for node in G.nodes()]
-print(predicted_labels)
-print(ground_truth_labels)
-
-# Compute AMI between ground truth and predicted clusters
-ami_pol_books = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"AMI pol_books: {ami_pol_books}")
-
-# Compute NMI between ground truth and predicted clusters
-nmi_pol_books = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"NMI pol_books: {nmi_pol_books}")
-
-visualize_clusters(G, clusters)
-
-########################### football
-
-# Load the Football graph
-football_path = os.path.join(base_path, 'football.gml')
-G = nx.read_gml(football_path)
-
-# Extract the ground truth labels from the 'gt' field in the GML file
-ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
-
-# Set your size constraints
-l, h = 5, 13  # Adjust your size constraints as needed
-clusters = multi_cluster_STCS(G, l, h)
-
-# Assign each node to a cluster ID
-node_to_cluster = {}
-for i, cluster in enumerate(clusters):
-    for node in cluster.nodes:
-        node_to_cluster[node] = i
-
-# Predicted labels based on the clusters
-predicted_labels = [node_to_cluster[node] for node in G.nodes()]
-print(predicted_labels)
-print(ground_truth_labels)
-
-# Compute AMI between ground truth and predicted clusters
-ami_football = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"AMI football: {ami_football}")
-
-# Compute NMI between ground truth and predicted clusters
-nmi_football = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"NMI football: {nmi_football}")
-
-visualize_clusters(G, clusters)
-
-
-#**************************************************************** Extras
-
-########################### AS topology
-
-# Load the AS Internet topology graph
-as_path = os.path.join(base_path, 'as.gml')
-G = nx.read_gml(as_path)
-
-# Extract the ground truth labels from the 'gt' field in the GML file
-ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
-
-# Set your size constraints
-l, h = 1, 7118  # Adjust your size constraints as needed
-clusters = multi_cluster_STCS(G, l, h)
-
-# Assign each node to a cluster ID
-node_to_cluster = {}
-for i, cluster in enumerate(clusters):
-    for node in cluster.nodes:
-        node_to_cluster[node] = i
-
-# Predicted labels based on the clusters
-predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
+# # Predicted labels based on the clusters
+# predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
 # print(predicted_labels)
 # print(ground_truth_labels)
 
-# Compute AMI between ground truth and predicted clusters
-ami_as = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"AMI AS: {ami_as}")
+# # Compute AMI between ground truth and predicted clusters
+# ami_dolphins = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"AMI dolphins: {ami_dolphins}")
 
-# Compute NMI between ground truth and predicted clusters
-nmi_as = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"NMI AS: {nmi_as}")
+# # Compute NMI between ground truth and predicted clusters
+# nmi_dolphins = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"NMI dolphins: {nmi_dolphins}")
 
 # visualize_clusters(G, clusters)
+
+# ########################### pol_books
+
+# # Load the Political Books graph
+# polbooks_path = os.path.join(base_path, 'polbooks.gml')
+# G = nx.read_gml(polbooks_path)
+
+# # Extract the ground truth labels from the 'gt' field in the GML file
+# label_map = {'n': 0, 'c': 1, 'l': 2}
+# ground_truth_labels = [label_map[G.nodes[node]['gt']] for node in G.nodes()]
+
+# # Set your size constraints
+# l, h = 13, 49  # Adjust your size constraints as needed
+# clusters = multi_cluster_STCS(G, l, h)
+
+# # Assign each node to a cluster ID
+# node_to_cluster = {}
+# for i, cluster in enumerate(clusters):
+#     for node in cluster.nodes:
+#         node_to_cluster[node] = i
+
+# # Predicted labels based on the clusters
+# predicted_labels = [node_to_cluster[node] for node in G.nodes()]
+# print(predicted_labels)
+# print(ground_truth_labels)
+
+# # Compute AMI between ground truth and predicted clusters
+# ami_pol_books = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"AMI pol_books: {ami_pol_books}")
+
+# # Compute NMI between ground truth and predicted clusters
+# nmi_pol_books = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"NMI pol_books: {nmi_pol_books}")
+
+# visualize_clusters(G, clusters)
+
+# ########################### football
+
+# # Load the Football graph
+# football_path = os.path.join(base_path, 'football.gml')
+# G = nx.read_gml(football_path)
+
+# # Extract the ground truth labels from the 'gt' field in the GML file
+# ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
+
+# # Set your size constraints
+# l, h = 5, 13  # Adjust your size constraints as needed
+# clusters = multi_cluster_STCS(G, l, h)
+
+# # Assign each node to a cluster ID
+# node_to_cluster = {}
+# for i, cluster in enumerate(clusters):
+#     for node in cluster.nodes:
+#         node_to_cluster[node] = i
+
+# # Predicted labels based on the clusters
+# predicted_labels = [node_to_cluster[node] for node in G.nodes()]
+# print(predicted_labels)
+# print(ground_truth_labels)
+
+# # Compute AMI between ground truth and predicted clusters
+# ami_football = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"AMI football: {ami_football}")
+
+# # Compute NMI between ground truth and predicted clusters
+# nmi_football = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"NMI football: {nmi_football}")
+
+# visualize_clusters(G, clusters)
+
+
+# #**************************************************************** Extras
+
+# ########################### AS topology
+
+# # Load the AS Internet topology graph
+# as_path = os.path.join(base_path, 'as.gml')
+# G = nx.read_gml(as_path)
+
+# # Extract the ground truth labels from the 'gt' field in the GML file
+# ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
+
+# # Set your size constraints
+# l, h = 1, 7118  # Adjust your size constraints as needed
+# clusters = multi_cluster_STCS(G, l, h)
+
+# # Assign each node to a cluster ID
+# node_to_cluster = {}
+# for i, cluster in enumerate(clusters):
+#     for node in cluster.nodes:
+#         node_to_cluster[node] = i
+
+# # Predicted labels based on the clusters
+# predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
+# # print(predicted_labels)
+# # print(ground_truth_labels)
+
+# # Compute AMI between ground truth and predicted clusters
+# ami_as = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"AMI AS: {ami_as}")
+
+# # Compute NMI between ground truth and predicted clusters
+# nmi_as = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"NMI AS: {nmi_as}")
+
+# # visualize_clusters(G, clusters)
 
 

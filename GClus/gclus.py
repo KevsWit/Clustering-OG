@@ -5,6 +5,7 @@ from itertools import combinations
 import matplotlib.pyplot as plt
 from networkx.algorithms.cuts import conductance
 import pymetis
+import numpy as np
 
 __author__ = """Kevin Castillo (kev.gcastillo@outlook.com)"""
 #    Copyright (C) 2024 by
@@ -26,6 +27,13 @@ def visualize_clusters(G, clusters):
     nx.draw_networkx_edges(G, pos, alpha=0.5)
     nx.draw_networkx_labels(G, pos)
     plt.show()
+
+
+def select_pivots(G, num_pivots):
+    """Selecciona nodos pivote en base a la centralidad de grado o alguna otra métrica de importancia."""
+    centrality = nx.degree_centrality(G)
+    sorted_nodes = sorted(centrality, key=centrality.get, reverse=True)
+    return sorted_nodes[:num_pivots]
 
 
 def truss_decomposition(G):
@@ -256,32 +264,28 @@ def GC_Final(G, q, l, h, trussness):
     return H
 
 
-def combine_small_clusters(clusters, l, h, G):
-    """Combina pequeños grupos en función de la similitud para formar grupos dentro de las restricciones de tamaño."""
+def combine_small_clusters(clusters, l, h, G, pivots):
+    """Combina clusters pequeños respetando los pivotes para garantizar el número de clusters."""
     combined_clusters = []
     remaining_clusters = []
-
     for cluster in clusters:
-        if len(cluster) < l:
+        if len(cluster) < l and not any(node in pivots for node in cluster):
             remaining_clusters.append(cluster)
         else:
             combined_clusters.append(cluster)
 
     while remaining_clusters:
-        # Elegir el cluster a fusionar
         cluster_to_combine = remaining_clusters.pop(0)
         best_merge = None
         best_similarity = -float('inf')
-
         for i, cluster in enumerate(remaining_clusters):
-            # Calcular la similaridad entre dos clusters usando la conductancia como indicador de fusión. 
+            if any(node in pivots for node in cluster):
+                continue
             similarity = conductance(G, cluster_to_combine, cluster)
             if similarity > best_similarity:
                 best_similarity = similarity
                 best_merge = i
-        
         if best_merge is not None:
-            # Combinar los dos clusters más similares
             merged_cluster = cluster_to_combine.union(remaining_clusters.pop(best_merge))
             if l <= len(merged_cluster) <= h:
                 combined_clusters.append(merged_cluster)
@@ -319,7 +323,7 @@ def split_large_clusters(clusters, h, G):
     return new_clusters
 
 
-def assign_unclustered_nodes(G, all_clusters, l, h):
+def assign_unclustered_nodes(G, all_clusters, l, h, pivots):
     """Asignar nodos no agrupados a clústeres existentes en función de la conductancia y la conexión directa."""
     all_clustered_nodes = set.union(*[set(cluster) for cluster in all_clusters])
     unclustered_nodes = set(G.nodes) - all_clustered_nodes
@@ -355,67 +359,106 @@ def assign_unclustered_nodes(G, all_clusters, l, h):
                     break
     
     # Combinar grupos pequeños si es necesario
-    combined_clusters = combine_small_clusters(all_clusters, l, h, G)
+    combined_clusters = combine_small_clusters(all_clusters, l, h, G, pivots)
     return combined_clusters
 
 
-def multi_cluster_STCS(G, l, h, max_iterations=5):
-    """Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño."""
-    iteration = 0
-    final_clusters = []
+def multi_cluster_STCS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
+    """
+    Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño especificadas para cada cluster.
+    Si `q_list` no está proporcionado, se seleccionan nodos iniciales automáticamente en función de una métrica.
+    """
+    # Verificación de que `delta` esté entre 0 y 1
+    if not (0 < delta < 1):
+        raise ValueError("El parámetro `delta` debe ser mayor a 0 y menor a 1.")
     
-    all_clusters = []
-    assigned_nodes = set()
-    din_G = G.copy()  # Hacemos una copia del grafo original
+    # Verificación de que la suma de `h_values` sea igual a la cantidad de nodos en el grafo
+    total_nodes = G.number_of_nodes()
+    if sum(h_values) != total_nodes:
+        raise ValueError("La suma de `h_values` debe ser igual a la cantidad de nodos en el grafo.")
 
-    # Paso 1: Generar los clusters iniciales
-    for q in G.nodes:  # Convertimos a lista para evitar problemas de modificación durante la iteración
+    final_clusters = []
+    assigned_nodes = set()
+    din_G = G.copy()
+    l_values = [int(h - (h * delta)) for h in h_values]  # Calcula `l` dinámicamente para cada `h` en `h_values`
+    num_clusters = len(h_values)
+    
+    # Seleccionar pivotes si no se proporciona `q_list`
+    q_list = select_pivots(G, num_clusters) if q_list is None else q_list
+
+    # Paso 1: Generar clusters iniciales para cada nodo pivote
+    for idx, q in enumerate(q_list):
+        cluster_nodes = set([q])  # Incluir `q` en el cluster desde el inicio
         if q in din_G.nodes:
             trussness = truss_decomposition(din_G)
-            H = GC_Final(din_G, q, l, h, trussness)
+            H = GC_Final(din_G, q, l_values[idx], h_values[idx], trussness)
             H_nodes_filtered = {n for n in H.nodes if n not in assigned_nodes}
 
-            if len(H_nodes_filtered) >= l:
+            # Garantizar que el nodo `q` esté en su cluster
+            if len(H_nodes_filtered) >= l_values[idx] or not H_nodes_filtered:
+                H_nodes_filtered.add(q)  # Añadir `q` al cluster si el tamaño es suficiente o está vacío
                 assigned_nodes.update(H_nodes_filtered)
-                all_clusters.append(H_nodes_filtered)
+                cluster_nodes.update(H_nodes_filtered)
                 din_G.remove_nodes_from(H_nodes_filtered)
+            else:
+                print(f"El cluster de q={q} es menor al tamaño mínimo requerido.")
 
+        # Aseguramos que el cluster tenga al menos el nodo `q`
+        if not cluster_nodes:
+            cluster_nodes.add(q)
+
+        final_clusters.append(cluster_nodes)
+
+    # Paso 2: Refinar clusters en iteraciones
+    iteration = 0
     while iteration < max_iterations:
         iteration += 1
+        refined_clusters = []
 
-        # Paso 2: Combina clusters pequeños
-        combined_clusters = combine_small_clusters(all_clusters, l, h, G)
+        # Refinar cada cluster para cumplir con los tamaños `l` y `h` específicos
+        for idx, cluster in enumerate(final_clusters):
+            if len(cluster) < l_values[idx]:
+                # Intentar combinar clusters pequeños o rellenarlos
+                refined_clusters.extend(combine_small_clusters([cluster], l_values[idx], h_values[idx], G, q_list))
+            elif len(cluster) > h_values[idx]:
+                # Dividir clusters grandes
+                refined_clusters.extend(split_large_clusters([cluster], h_values[idx], G))
+            else:
+                refined_clusters.append(cluster)
 
-        # Paso 3: Divide clusters grandes
-        final_clusters = []
-        for cluster in combined_clusters:
-            final_clusters.extend(split_large_clusters([cluster], h, G))
+        # Asegurarse de tener la cantidad de clusters exacta
+        if len(refined_clusters) < num_clusters:
+            refined_clusters.extend([set()] * (num_clusters - len(refined_clusters)))
+        elif len(refined_clusters) > num_clusters:
+            refined_clusters = combine_small_clusters(refined_clusters, min(l_values), max(h_values), G, q_list)
 
-        # Paso 4: Asigna nodos no clusterizados
-        final_clusters = assign_unclustered_nodes(G, final_clusters, l, h)
-
-        # Paso 5: Verificar si todos los nodos están asignados a un cluster
+        final_clusters = assign_unclustered_nodes(G, refined_clusters, min(l_values), max(h_values), q_list)
         all_clustered_nodes = set.union(*[set(cluster) for cluster in final_clusters])
         unclustered_nodes = set(G.nodes()) - all_clustered_nodes
 
+        # Si no quedan nodos sin asignar, salir del bucle
         if not unclustered_nodes:
-            # Verificar si todos los nodos están asignados a un solo cluster
-            num_clusters = len([cluster for cluster in final_clusters if len(cluster) > 0])
-            if num_clusters == 1:
-                print("Todos los nodos han sido asignados a un solo cluster. Repitiendo combinación y partición.")
-            else:
-                # Si no quedan nodos sin cluster y hay más de un cluster, salimos del ciclo
-                break
+            break
+        print(f"Iteración {iteration}: Nodos sin cluster: {len(unclustered_nodes)}.")
 
-        print(f"Iteración {iteration}: Nodos sin cluster: {len(unclustered_nodes)}. Repitiendo combinación y partición.")
-
-    # Si después de las iteraciones quedan nodos sin asignar, se asigna cada uno a su propio cluster
+    # Paso 3: Asignar nodos restantes si es necesario
     if unclustered_nodes:
-        print("Algunos nodos no fueron asignados a clusters respetando los tamaños mínimos. Creando clusters individuales para estos nodos.")
+        print("Asignando nodos restantes a los clusters más pequeños.")
         for node in unclustered_nodes:
-            final_clusters.append(G.subgraph([node]))
+            smallest_cluster = min(final_clusters, key=lambda c: len(c))
+            if len(smallest_cluster) < h_values[final_clusters.index(smallest_cluster)]:
+                smallest_cluster.add(node)
 
-    # Convertimos de nuevo a subgrafos y filtramos clusters vacíos
+    # Convertimos los clusters a subgrafos y eliminamos clusters vacíos
     final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]
 
+    # Asegurar la cantidad de clusters especificada
+    while len(final_clusters) < num_clusters:
+        final_clusters.append(G.subgraph(set()))
+
     return final_clusters
+
+
+    # proximo avance:
+    # probar el algoritmo en distintos contextos
+    
