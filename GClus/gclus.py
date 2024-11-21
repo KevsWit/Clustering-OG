@@ -277,13 +277,13 @@ def combine_small_clusters(clusters, l, h, G, pivots):
     while remaining_clusters:
         cluster_to_combine = remaining_clusters.pop(0)
         best_merge = None
-        best_similarity = -float('inf')
+        best_conductance = -float('inf')
         for i, cluster in enumerate(remaining_clusters):
             if any(node in pivots for node in cluster):
                 continue
-            similarity = conductance(G, cluster_to_combine, cluster)
-            if similarity > best_similarity:
-                best_similarity = similarity
+            conductance_value = conductance(G, cluster_to_combine, cluster)
+            if conductance_value > best_conductance:
+                best_conductance = conductance_value
                 best_merge = i
         if best_merge is not None:
             merged_cluster = cluster_to_combine.union(remaining_clusters.pop(best_merge))
