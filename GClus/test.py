@@ -2,7 +2,7 @@ import networkx as nx
 import os
 from sklearn.metrics import normalized_mutual_info_score  # NMI
 from sklearn.metrics import adjusted_mutual_info_score  # AMI
-from gclus import multi_cluster_STCS, visualize_clusters
+from gclus import multi_cluster_GCLUS, visualize_clusters
 
 # Define the base path to the test files
 base_path = os.path.join('test')
@@ -21,7 +21,7 @@ ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 # Set your size constraints
 h_values = [7,8,7,12]  # Adjust your size constraints as needed
 delta = 0.1
-clusters = multi_cluster_STCS(G, h_values, delta)
+clusters = multi_cluster_GCLUS(G, h_values, delta)
 
 # Assign each node to a cluster ID
 node_to_cluster = {}
@@ -61,7 +61,7 @@ visualize_clusters(G, clusters)
 
 # # Set your size constraints
 # l, h = 20, 42  # Adjust your size constraints as needed
-# clusters = multi_cluster_STCS(G, l, h)
+# clusters = multi_cluster_GCLUS(G, l, h)
 
 # # Assign each node to a cluster ID
 # node_to_cluster = {}
@@ -96,7 +96,7 @@ visualize_clusters(G, clusters)
 
 # # Set your size constraints
 # l, h = 13, 49  # Adjust your size constraints as needed
-# clusters = multi_cluster_STCS(G, l, h)
+# clusters = multi_cluster_GCLUS(G, l, h)
 
 # # Assign each node to a cluster ID
 # node_to_cluster = {}
@@ -130,7 +130,7 @@ visualize_clusters(G, clusters)
 
 # # Set your size constraints
 # l, h = 5, 13  # Adjust your size constraints as needed
-# clusters = multi_cluster_STCS(G, l, h)
+# clusters = multi_cluster_GCLUS(G, l, h)
 
 # # Assign each node to a cluster ID
 # node_to_cluster = {}
@@ -167,7 +167,7 @@ visualize_clusters(G, clusters)
 
 # # Set your size constraints
 # l, h = 1, 7118  # Adjust your size constraints as needed
-# clusters = multi_cluster_STCS(G, l, h)
+# clusters = multi_cluster_GCLUS(G, l, h)
 
 # # Assign each node to a cluster ID
 # node_to_cluster = {}
