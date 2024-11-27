@@ -363,7 +363,7 @@ def assign_unclustered_nodes(G, all_clusters, l, h, pivots):
     return combined_clusters
 
 
-def multi_cluster_STCS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
+def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     """
     Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño especificadas para cada cluster.
     Si `q_list` no está proporcionado, se seleccionan nodos iniciales automáticamente en función de una métrica.
