@@ -2,24 +2,76 @@ import networkx as nx
 import os
 from sklearn.metrics import normalized_mutual_info_score  # NMI
 from sklearn.metrics import adjusted_mutual_info_score  # AMI
+from networkx.algorithms.community import modularity # Modularidad
 from gclus import multi_cluster_GCLUS, visualize_clusters
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+from smknn import cluster
+
+# ### Aplicacion
+
+# ########################### karate
 
 # Define the base path to the test files
 base_path = os.path.join('test')
-
-### Aplicacion
-
-########################### karate
 
 # Load the Karate Club graph
 karate_path = os.path.join(base_path, 'karate.gml')
 G = nx.read_gml(karate_path)
 
+########################### SMKNN
+
+# Crear datos de entrada para el algoritmo SMKNN (usar embeddings o características de nodos)
+# Aquí usamos una matriz de adyacencia como entrada y reducimos dimensionalidad con PCA
+adj_matrix = nx.adjacency_matrix(G).toarray()
+scaler = StandardScaler()
+scaled_adj_matrix = scaler.fit_transform(adj_matrix)
+pca = PCA(n_components=2)
+data = pca.fit_transform(scaled_adj_matrix)
+
+# Número de clusters deseados
+K = 4
+
+# Ejecutar el algoritmo SMKNN
+clusters, labels = cluster(data, K)
+
+# Crear el diccionario de clusters con las etiquetas únicas generadas por SMKNN
+unique_labels = set(map(int, labels))  # Convertir las etiquetas a enteros y eliminar duplicados
+clusters_smk = {label: set() for label in unique_labels}  # Crear un diccionario con esas claves
+
+# Asignar nodos a los clusters
+for node, label in zip(G.nodes(), labels):
+    clusters_smk[int(label)].add(node)  # Convertir etiqueta a entero y agregar nodo
+
+# Convertir el diccionario a una lista de conjuntos para calcular la modularidad
+clusters_smk_list = list(clusters_smk.values())
+
+# Calcular la modularidad
+modularity_value = modularity(G, clusters_smk_list)
+print(f"Modularidad de los clusters generados por SMKNN: {modularity_value:.4f}")
+
+
+
+# Visualizar los resultados en el grafo original
+pos = nx.spring_layout(G, seed=42)  # Layout para visualización
+colors = [plt.cm.tab10(int(label)) for label in labels]
+
+plt.figure(figsize=(10, 7))
+nx.draw_networkx_nodes(G, pos, node_color=colors, node_size=300, cmap='tab10')
+nx.draw_networkx_edges(G, pos, alpha=0.5)
+nx.draw_networkx_labels(G, pos, font_size=10)
+plt.title("Clustering del grafo Karate Club con SMKNN")
+plt.show()
+
+########################### GCLUS
+
 # Extract the ground truth labels from the 'gt' field in the GML file
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # Set your size constraints
-h_values = [7,8,7,12]  # Adjust your size constraints as needed
+h_values = [10,5,9,10]  # Adjust your size constraints as needed
 delta = 0.1
 clusters = multi_cluster_GCLUS(G, h_values, delta)
 
@@ -28,6 +80,13 @@ node_to_cluster = {}
 for i, cluster in enumerate(clusters):
     for node in cluster.nodes:
         node_to_cluster[node] = i
+
+# Crear las comunidades como una lista de conjuntos
+communities = [set(cluster.nodes) for cluster in clusters]
+
+# Calcular la modularidad si la partición es válida
+modularity_value = modularity(G, communities)
+print(f"Modularidad de los clusters: {modularity_value}")
 
 # Predicted labels based on the clusters
 predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
@@ -39,14 +98,6 @@ cluster_counts = {i + 1: len(cluster.nodes) for i, cluster in enumerate(clusters
 print("\nCluster sizes:")
 for cluster_id, count in cluster_counts.items():
     print(f"Cluster {cluster_id}: {count} nodes")
-
-# Compute AMI between ground truth and predicted clusters
-ami_karate = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"AMI karate: {ami_karate}")
-
-# Compute NMI between ground truth and predicted clusters
-nmi_karate = normalized_mutual_info_score(ground_truth_labels, predicted_labels)
-print(f"NMI karate: {nmi_karate}")
 
 visualize_clusters(G, clusters)
 

@@ -268,16 +268,21 @@ def combine_small_clusters(clusters, l, h, G, pivots):
     """Combina clusters pequeños respetando los pivotes para garantizar el número de clusters."""
     combined_clusters = []
     remaining_clusters = []
+    assigned_nodes = set()  # Para rastrear nodos ya asignados
+
     for cluster in clusters:
         if len(cluster) < l and not any(node in pivots for node in cluster):
             remaining_clusters.append(cluster)
         else:
-            combined_clusters.append(cluster)
+            if not cluster & assigned_nodes:  # Verificar que no haya nodos ya asignados
+                combined_clusters.append(cluster)
+                assigned_nodes.update(cluster)
 
     while remaining_clusters:
         cluster_to_combine = remaining_clusters.pop(0)
         best_merge = None
         best_conductance = -float('inf')
+
         for i, cluster in enumerate(remaining_clusters):
             if any(node in pivots for node in cluster):
                 continue
@@ -285,12 +290,18 @@ def combine_small_clusters(clusters, l, h, G, pivots):
             if conductance_value > best_conductance:
                 best_conductance = conductance_value
                 best_merge = i
+
         if best_merge is not None:
             merged_cluster = cluster_to_combine.union(remaining_clusters.pop(best_merge))
+            merged_cluster -= assigned_nodes  # Eliminar nodos ya asignados
             if l <= len(merged_cluster) <= h:
                 combined_clusters.append(merged_cluster)
+                assigned_nodes.update(merged_cluster)
         else:
-            combined_clusters.append(cluster_to_combine)
+            cluster_to_combine -= assigned_nodes  # Eliminar nodos ya asignados
+            if cluster_to_combine:
+                combined_clusters.append(cluster_to_combine)
+                assigned_nodes.update(cluster_to_combine)
 
     return combined_clusters
 
@@ -298,7 +309,8 @@ def combine_small_clusters(clusters, l, h, G, pivots):
 def split_large_clusters(clusters, h, G):
     """Divide clusters grandes en función de la conectividad interna para formar subclústeres dentro de las restricciones de tamaño."""
     new_clusters = []
-    
+    assigned_nodes = set()  # Para rastrear nodos ya asignados
+
     for cluster in clusters:
         if len(cluster) > h:
             # Dividir el clúster grande utilizando la estrategia de corte interno
@@ -313,14 +325,25 @@ def split_large_clusters(clusters, h, G):
             cluster1 = set(nodes[i] for i in range(len(parts)) if parts[i] == 0)
             cluster2 = set(nodes[i] for i in range(len(parts)) if parts[i] == 1)
 
+            # Eliminar nodos ya asignados
+            cluster1 -= assigned_nodes
+            cluster2 -= assigned_nodes
+
             if len(cluster1) > 0:
                 new_clusters.append(cluster1)
+                assigned_nodes.update(cluster1)
             if len(cluster2) > 0:
                 new_clusters.append(cluster2)
+                assigned_nodes.update(cluster2)
         else:
-            new_clusters.append(cluster)
+            # Verificar que no haya nodos ya asignados
+            cluster -= assigned_nodes
+            if cluster:
+                new_clusters.append(cluster)
+                assigned_nodes.update(cluster)
 
     return new_clusters
+
 
 
 def assign_unclustered_nodes(G, all_clusters, l, h, pivots):
@@ -456,9 +479,20 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     while len(final_clusters) < num_clusters:
         final_clusters.append(G.subgraph(set()))
 
+    # Verificación final de disjunción y unicidad de nodos
+    all_nodes_in_clusters = set()
+    for idx, cluster in enumerate(final_clusters):
+        cluster_nodes = set(cluster.nodes)
+        if all_nodes_in_clusters & cluster_nodes:
+            print(f"Error: Nodos duplicados detectados en el cluster {idx + 1}.")
+        all_nodes_in_clusters.update(cluster_nodes)
+
+    if len(all_nodes_in_clusters) != total_nodes:
+        print("Error: No todos los nodos del grafo están asignados a los clusters.")
+
     return final_clusters
 
-
-    # proximo avance:
-    # probar el algoritmo en distintos contextos
-    
+# Proximos pasos:
+# * Crear funcion best cluseting
+# * ajustar tamaño
+# * ajustar calidad
