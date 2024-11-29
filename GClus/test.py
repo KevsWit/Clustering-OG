@@ -70,9 +70,12 @@ plt.show()
 # Extract the ground truth labels from the 'gt' field in the GML file
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
-# Set your size constraints
-h_values = [10,5,9,10]  # Adjust your size constraints as needed
+# Configuración
+# h_values = [10,5,9,10]
+h_values = [7,7,10,10]
 delta = 0.1
+
+# Ejecutar la función
 clusters = multi_cluster_GCLUS(G, h_values, delta)
 
 # Assign each node to a cluster ID
