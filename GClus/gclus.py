@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from networkx.algorithms.cuts import conductance
 import pymetis
 import numpy as np
+import copy
+from networkx.algorithms.community import modularity
 
 __author__ = """Kevin Castillo (kev.gcastillo@outlook.com)"""
 #    Copyright (C) 2024 by
@@ -389,44 +391,44 @@ def assign_unclustered_nodes(G, all_clusters, l, h, pivots):
 def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     """
     Genera múltiples clusters utilizando el algoritmo STCS y garantiza que respeten las restricciones de tamaño especificadas para cada cluster.
-    Si `q_list` no está proporcionado, se seleccionan nodos iniciales automáticamente en función de una métrica.
+    Para q_list se seleccionan nodos iniciales automáticamente en función de una métrica.
     """
-    # Verificación de que `delta` esté entre 0 y 1
+    # Verificación de que delta esté entre 0 y 1
     if not (0 < delta < 1):
-        raise ValueError("El parámetro `delta` debe ser mayor a 0 y menor a 1.")
+        raise ValueError("El parámetro delta debe ser mayor a 0 y menor a 1.")
     
-    # Verificación de que la suma de `h_values` sea igual a la cantidad de nodos en el grafo
+    # Verificación de que la suma de h_values sea igual a la cantidad de nodos en el grafo
     total_nodes = G.number_of_nodes()
     if sum(h_values) != total_nodes:
-        raise ValueError("La suma de `h_values` debe ser igual a la cantidad de nodos en el grafo.")
+        raise ValueError("La suma de h_values debe ser igual a la cantidad de nodos en el grafo.")
 
     final_clusters = []
     assigned_nodes = set()
     din_G = G.copy()
-    l_values = [int(h - (h * delta)) for h in h_values]  # Calcula `l` dinámicamente para cada `h` en `h_values`
+    l_values = [int(h - (h * delta)) for h in h_values]  # Calcula l dinámicamente para cada h en h_values
     num_clusters = len(h_values)
     
-    # Seleccionar pivotes si no se proporciona `q_list`
-    q_list = select_pivots(G, num_clusters) if q_list is None else q_list
+    # Seleccionar pivotes si no se proporciona q_list
+    q_list = select_pivots(G, num_clusters)
 
     # Paso 1: Generar clusters iniciales para cada nodo pivote
     for idx, q in enumerate(q_list):
-        cluster_nodes = set([q])  # Incluir `q` en el cluster desde el inicio
+        cluster_nodes = set([q])  # Incluir q en el cluster desde el inicio
         if q in din_G.nodes:
             trussness = truss_decomposition(din_G)
             H = GC_Final(din_G, q, l_values[idx], h_values[idx], trussness)
             H_nodes_filtered = {n for n in H.nodes if n not in assigned_nodes}
 
-            # Garantizar que el nodo `q` esté en su cluster
+            # Garantizar que el nodo q esté en su cluster
             if len(H_nodes_filtered) >= l_values[idx] or not H_nodes_filtered:
-                H_nodes_filtered.add(q)  # Añadir `q` al cluster si el tamaño es suficiente o está vacío
+                H_nodes_filtered.add(q)  # Añadir q al cluster si el tamaño es suficiente o está vacío
                 assigned_nodes.update(H_nodes_filtered)
                 cluster_nodes.update(H_nodes_filtered)
                 din_G.remove_nodes_from(H_nodes_filtered)
             else:
                 print(f"El cluster de q={q} es menor al tamaño mínimo requerido.")
 
-        # Aseguramos que el cluster tenga al menos el nodo `q`
+        # Aseguramos que el cluster tenga al menos el nodo q
         if not cluster_nodes:
             cluster_nodes.add(q)
 
@@ -438,7 +440,7 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
         iteration += 1
         refined_clusters = []
 
-        # Refinar cada cluster para cumplir con los tamaños `l` y `h` específicos
+        # Refinar cada cluster para cumplir con los tamaños l y h específicos
         for idx, cluster in enumerate(final_clusters):
             if len(cluster) < l_values[idx]:
                 # Intentar combinar clusters pequeños o rellenarlos
@@ -449,13 +451,13 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
             else:
                 refined_clusters.append(cluster)
 
-        # Asegurarse de tener la cantidad de clusters exacta
-        if len(refined_clusters) < num_clusters:
-            refined_clusters.extend([set()] * (num_clusters - len(refined_clusters)))
-        elif len(refined_clusters) > num_clusters:
-            refined_clusters = combine_small_clusters(refined_clusters, min(l_values), max(h_values), G, q_list)
-
         final_clusters = assign_unclustered_nodes(G, refined_clusters, min(l_values), max(h_values), q_list)
+        # Asegurarse de tener la cantidad de clusters exacta
+        if len(final_clusters) < num_clusters:
+            final_clusters.extend([set()] * (num_clusters - len(final_clusters)))
+        elif len(refined_clusters) > num_clusters:
+            final_clusters = combine_small_clusters(final_clusters, min(l_values), max(h_values), G, q_list)
+
         all_clustered_nodes = set.union(*[set(cluster) for cluster in final_clusters])
         unclustered_nodes = set(G.nodes()) - all_clustered_nodes
 
@@ -479,20 +481,55 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     while len(final_clusters) < num_clusters:
         final_clusters.append(G.subgraph(set()))
 
-    # Verificación final de disjunción y unicidad de nodos
-    all_nodes_in_clusters = set()
-    for idx, cluster in enumerate(final_clusters):
-        cluster_nodes = set(cluster.nodes)
-        if all_nodes_in_clusters & cluster_nodes:
-            print(f"Error: Nodos duplicados detectados en el cluster {idx + 1}.")
-        all_nodes_in_clusters.update(cluster_nodes)
-
-    if len(all_nodes_in_clusters) != total_nodes:
-        print("Error: No todos los nodos del grafo están asignados a los clusters.")
-
     return final_clusters
 
-# Proximos pasos:
-# * Crear funcion best cluseting
-# * ajustar tamaño
-# * ajustar calidad
+
+# def best_clustering(G, h_values, delta=0.2, max_iterations=5, max_retries=5):
+#     """
+#     Encuentra la mejor partición iterativamente hasta cumplir con los clusters requeridos.
+#     Combina clusters si es necesario para ajustarse al número de grupos especificado.
+#     """
+#     num_clusters = len(h_values)  # Número de clusters requeridos
+#     best_clusters = None
+#     best_modularity = -float('inf')  # Iniciar con el peor valor posible de modularidad
+
+#     for retry in range(max_retries):
+#         print(f"Intento {retry + 1}/{max_retries}")
+        
+#         # Generar una partición inicial con multi_cluster_GCLUS
+#         clusters = multi_cluster_GCLUS(
+#             G, h_values, delta=delta, max_iterations=max_iterations
+#         )
+
+#         # Combinar clusters si hay más de los necesarios
+#         if len(clusters) > num_clusters:
+#             print("Número de clusters excedido, intentando combinar clusters.")
+#             clusters = combine_small_clusters(clusters, min(h_values), max(h_values), G, pivots=[])
+
+#         # Verificar si cumple con la cantidad de clusters requerida
+#         if len(clusters) != num_clusters:
+#             print(f"Partición inválida: se obtuvieron {len(clusters)} clusters en lugar de {num_clusters}.")
+#             continue  # Reintentar si la partición no es válida
+
+#         # Calcular la modularidad de la partición actual
+#         communities = [set(cluster.nodes) for cluster in clusters]
+#         current_modularity = modularity(G, communities)
+
+#         print(f"Modularidad de esta partición: {current_modularity}")
+
+#         # Actualizar la mejor partición si es superior
+#         if current_modularity > best_modularity:
+#             best_modularity = current_modularity
+#             best_clusters = copy.deepcopy(clusters)
+
+#         # Si cumple con los clusters requeridos y tiene una buena modularidad, detenerse temprano
+#         if len(clusters) == num_clusters and best_modularity > 0.15:
+#             print("Se encontró una partición con modularidad óptima, el algoritmo está deteniéndose.")
+#             break
+
+#     # Verificar si se encontró una partición válida
+#     if not best_clusters or len(best_clusters) != num_clusters:
+#         print("No se pudo encontrar una partición válida que cumpla con los requisitos.")
+
+#     return best_clusters, best_modularity
+
