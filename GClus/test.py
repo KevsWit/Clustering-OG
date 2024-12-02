@@ -10,6 +10,37 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from smknn import cluster
 
+# Calcular la desviación de los tamaños solicitados
+def calculate_deviation(h_values, cluster_counts):
+    """
+    Calcula la desviación total, promedio y porcentual entre los tamaños solicitados y los obtenidos.
+    """
+    requested_sizes = h_values.copy()
+    obtained_sizes = list(cluster_counts.values())
+
+    # Ordenar listas para emparejar las desviaciones más pequeñas
+    requested_sizes.sort()
+    obtained_sizes.sort()
+
+    deviations = [abs(r - o) for r, o in zip(requested_sizes, obtained_sizes)]
+
+    # Calcular métricas de desviación
+    total_deviation = sum(deviations)
+    average_deviation = total_deviation / len(h_values)
+    percentage_deviation = (total_deviation / sum(h_values)) * 100
+
+    # Imprimir detalles
+    print("\nDesviación por cluster:")
+    for i, (requested, obtained, deviation) in enumerate(zip(requested_sizes, obtained_sizes, deviations), start=1):
+        print(f"Cluster {i}: Solicitado={requested}, Obtenido={obtained}, Desviación={deviation}")
+
+    print(f"\nDesviación total: {total_deviation}")
+    print(f"Desviación promedio: {average_deviation:.2f}")
+    print(f"Desviación porcentual: {percentage_deviation:.2f}%")
+
+    return total_deviation, average_deviation, percentage_deviation
+
+
 # ### Aplicacion
 
 # ########################### karate
@@ -32,7 +63,7 @@ pca = PCA(n_components=2)
 data = pca.fit_transform(scaled_adj_matrix)
 
 # Número de clusters deseados
-K = 4
+K = 3
 
 # Ejecutar el algoritmo SMKNN
 clusters, labels = cluster(data, K)
@@ -48,12 +79,6 @@ for node, label in zip(G.nodes(), labels):
 # Convertir el diccionario a una lista de conjuntos para calcular la modularidad
 clusters_smk_list = list(clusters_smk.values())
 
-# Calcular la modularidad
-modularity_value = modularity(G, clusters_smk_list)
-print(f"Modularidad de los clusters generados por SMKNN: {modularity_value:.4f}")
-
-
-
 # Visualizar los resultados en el grafo original
 pos = nx.spring_layout(G, seed=42)  # Layout para visualización
 colors = [plt.cm.tab10(int(label)) for label in labels]
@@ -65,6 +90,11 @@ nx.draw_networkx_labels(G, pos, font_size=10)
 plt.title("Clustering del grafo Karate Club con SMKNN")
 plt.show()
 
+print('\n######### Resultados\n')
+# Calcular la modularidad
+modularity_value = modularity(G, clusters_smk_list)
+print(f"Modularidad de los clusters generados por SMKNN: {modularity_value:.4f}")
+
 ########################### GCLUS
 
 # Extract the ground truth labels from the 'gt' field in the GML file
@@ -72,7 +102,8 @@ ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # Configuración
 # h_values = [10,5,9,10]
-h_values = [7,7,10,10]
+# h_values = [1,3,10,15,5]
+h_values = [7,17,10]
 delta = 0.1
 
 # Ejecutar la función
@@ -87,22 +118,27 @@ for i, cluster in enumerate(clusters):
 # Crear las comunidades como una lista de conjuntos
 communities = [set(cluster.nodes) for cluster in clusters]
 
-# Calcular la modularidad si la partición es válida
-modularity_value = modularity(G, communities)
-print(f"Modularidad de los clusters: {modularity_value}")
-
-# Predicted labels based on the clusters
+# Etiquetas predichas basadas en el cluster
 predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
 print(predicted_labels)
 print(ground_truth_labels)
 
-# Count nodes in each predicted cluster and print the results
+# Contar nodos en cada cluster predicho
 cluster_counts = {i + 1: len(cluster.nodes) for i, cluster in enumerate(clusters)}
 print("\nCluster sizes:")
 for cluster_id, count in cluster_counts.items():
     print(f"Cluster {cluster_id}: {count} nodes")
 
 visualize_clusters(G, clusters)
+
+print('\n######### Resultados\n')
+
+# Calcular la modularidad si la partición es válida
+modularity_value = modularity(G, communities)
+print(f"Modularidad de los clusters: {modularity_value}")
+
+# Calcular y mostrar las métricas de desviación
+total_dev, avg_dev, perc_dev = calculate_deviation(h_values, cluster_counts)
 
 ########################### dolphins
 
