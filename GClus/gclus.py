@@ -421,7 +421,9 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
 
             # Garantizar que el nodo q esté en su cluster
             if len(H_nodes_filtered) >= l_values[idx] or not H_nodes_filtered:
-                H_nodes_filtered.add(q)  # Añadir q al cluster si el tamaño es suficiente o está vacío
+                # Añadir q solo si no está ya en H_nodes_filtered
+                if q not in H_nodes_filtered:
+                    H_nodes_filtered.add(q)
                 assigned_nodes.update(H_nodes_filtered)
                 cluster_nodes.update(H_nodes_filtered)
                 din_G.remove_nodes_from(H_nodes_filtered)
@@ -433,25 +435,67 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
             cluster_nodes.add(q)
 
         final_clusters.append(cluster_nodes)
+    
+    # Paso 2: Asignar nodos no clusterizados antes de las iteraciones
+    all_clustered_nodes = set.union(*[set(cluster) for cluster in final_clusters])
+    unclustered_nodes = set(G.nodes()) - all_clustered_nodes
 
-    # Paso 2: Refinar clusters en iteraciones
+    if unclustered_nodes:
+        print(f"Asignando nodos no clusterizados iniciales: {len(unclustered_nodes)} nodos.")
+        final_clusters = assign_unclustered_nodes(G, final_clusters, min(l_values), max(h_values), q_list)
+
+    # Refinar clusters en iteraciones
     iteration = 0
+    remaining_l_values = l_values.copy()  # Inicializar las restricciones dinámicas al inicio
+    remaining_h_values = h_values.copy()
+
     while iteration < max_iterations:
         iteration += 1
         refined_clusters = []
+        combine_clusters = []
+
+        # Crear listas temporales para las restricciones restantes
+        temp_l_values = []
+        temp_h_values = []
 
         # Refinar cada cluster para cumplir con los tamaños l y h específicos
         for idx, cluster in enumerate(final_clusters):
-            if len(cluster) < l_values[idx]:
+            print(f"Iteración {iteration}, Cluster {idx}: Tamaño actual: {len(cluster)}")
+            if len(cluster) < remaining_l_values[idx]:
                 # Intentar combinar clusters pequeños o rellenarlos
-                refined_clusters.extend(combine_small_clusters([cluster], l_values[idx], h_values[idx], G, q_list))
-            elif len(cluster) > h_values[idx]:
+                if len(refined_clusters) == 0:
+                    refined_clusters.extend(
+                        combine_small_clusters(
+                            final_clusters, remaining_l_values[idx], remaining_h_values[idx], G, q_list
+                        )
+                    )
+                else:
+                    combine_clusters = refined_clusters.copy()
+                    combine_clusters.append(cluster)
+                    refined_clusters.extend(
+                        combine_small_clusters(
+                            combine_clusters, remaining_l_values[idx], remaining_h_values[idx], G, q_list
+                        )
+                    )
+            elif len(cluster) > remaining_h_values[idx] and (len(final_clusters) < num_clusters and idx == 0):
                 # Dividir clusters grandes
-                refined_clusters.extend(split_large_clusters([cluster], h_values[idx], G))
+                print("num ref clus: ", len(final_clusters), ", clusters: ", num_clusters)
+                refined_clusters.extend(
+                    split_large_clusters([cluster], remaining_h_values[idx], G)
+                )
             else:
+                # Cluster refinado, agregarlo a refined_clusters
                 refined_clusters.append(cluster)
+                # Guardar restricciones de tamaño para clusters no procesados
+                temp_l_values.append(remaining_l_values[idx])
+                temp_h_values.append(remaining_h_values[idx])
+
+        # Actualizar restricciones restantes
+        remaining_l_values = temp_l_values
+        remaining_h_values = temp_h_values
 
         final_clusters = assign_unclustered_nodes(G, refined_clusters, min(l_values), max(h_values), q_list)
+        
         # Asegurarse de tener la cantidad de clusters exacta
         if len(final_clusters) < num_clusters:
             final_clusters.extend([set()] * (num_clusters - len(final_clusters)))
@@ -465,6 +509,7 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
         if not unclustered_nodes:
             break
         print(f"Iteración {iteration}: Nodos sin cluster: {len(unclustered_nodes)}.")
+
 
     # Paso 3: Asignar nodos restantes si es necesario
     if unclustered_nodes:
@@ -482,6 +527,57 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
         final_clusters.append(G.subgraph(set()))
 
     return final_clusters
+
+
+
+    # # Paso 2: Refinar clusters en iteraciones
+    # iteration = 0
+    # while iteration < max_iterations:
+    #     iteration += 1
+    #     refined_clusters = []
+
+    #     # Refinar cada cluster para cumplir con los tamaños l y h específicos
+    #     for idx, cluster in enumerate(final_clusters):
+    #         if len(cluster) < l_values[idx]:
+    #             # Intentar combinar clusters pequeños o rellenarlos
+    #             refined_clusters.extend(combine_small_clusters([cluster], l_values[idx], h_values[idx], G, q_list))
+    #         elif len(cluster) > h_values[idx]:
+    #             # Dividir clusters grandes
+    #             refined_clusters.extend(split_large_clusters([cluster], h_values[idx], G))
+    #         else:
+    #             refined_clusters.append(cluster)
+
+    #     final_clusters = assign_unclustered_nodes(G, refined_clusters, min(l_values), max(h_values), q_list)
+    #     # Asegurarse de tener la cantidad de clusters exacta
+    #     if len(final_clusters) < num_clusters:
+    #         final_clusters.extend([set()] * (num_clusters - len(final_clusters)))
+    #     elif len(refined_clusters) > num_clusters:
+    #         final_clusters = combine_small_clusters(final_clusters, min(l_values), max(h_values), G, q_list)
+
+    #     all_clustered_nodes = set.union(*[set(cluster) for cluster in final_clusters])
+    #     unclustered_nodes = set(G.nodes()) - all_clustered_nodes
+
+    #     # Si no quedan nodos sin asignar, salir del bucle
+    #     if not unclustered_nodes:
+    #         break
+    #     print(f"Iteración {iteration}: Nodos sin cluster: {len(unclustered_nodes)}.")
+
+    # # Paso 3: Asignar nodos restantes si es necesario
+    # if unclustered_nodes:
+    #     print("Asignando nodos restantes a los clusters más pequeños.")
+    #     for node in unclustered_nodes:
+    #         smallest_cluster = min(final_clusters, key=lambda c: len(c))
+    #         if len(smallest_cluster) < h_values[final_clusters.index(smallest_cluster)]:
+    #             smallest_cluster.add(node)
+
+    # # Convertimos los clusters a subgrafos y eliminamos clusters vacíos
+    # final_clusters = [G.subgraph(cluster) for cluster in final_clusters if len(cluster) > 0]
+
+    # # Asegurar la cantidad de clusters especificada
+    # while len(final_clusters) < num_clusters:
+    #     final_clusters.append(G.subgraph(set()))
+
+    # return final_clusters
 
 
 # def best_clustering(G, h_values, delta=0.2, max_iterations=5, max_retries=5):
