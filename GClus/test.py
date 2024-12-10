@@ -63,7 +63,7 @@ pca = PCA(n_components=2)
 data = pca.fit_transform(scaled_adj_matrix)
 
 # Número de clusters deseados
-K = 3
+K = 4
 
 # Ejecutar el algoritmo SMKNN
 clusters, labels = cluster(data, K)
@@ -101,9 +101,10 @@ print(f"Modularidad de los clusters generados por SMKNN: {modularity_value:.4f}"
 ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # Configuración
-# h_values = [10,5,9,10]
+h_values = [10,5,9,10]
 # h_values = [1,3,10,15,5]
-h_values = [7,17,10]
+# h_values = [7,17,10]
+# h_values = [16,18]
 delta = 0.1
 
 # Ejecutar la función
