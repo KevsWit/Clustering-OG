@@ -346,68 +346,53 @@ def split_large_clusters(clusters, h, G):
 
     return new_clusters
 
+def assign_unclustered_nodes(G, all_clusters, l, h, pivots, blocked_clusters):
+    """
+    Asignar nodos no agrupados utilizando conductancia, distancia al pivote y una segunda pasada para considerar caminos mínimos.
+    Respeta los clusters bloqueados para evitar modificaciones.
+    """
+    # Ajustar el tamaño de blocked_clusters si no coincide con all_clusters
+    if len(blocked_clusters) != len(all_clusters):
+        blocked_clusters = blocked_clusters[:len(all_clusters)] + [False] * (len(all_clusters) - len(blocked_clusters))
 
-
-def assign_unclustered_nodes(G, all_clusters, l, h, pivots):
-    """Asignar nodos no agrupados a clústeres existentes en función de la conductancia y la conexión directa."""
-    all_clustered_nodes = set.union(*[set(cluster) for cluster in all_clusters])
+    # Primera pasada: Asignar nodos no agrupados basándonos en conductancia
+    all_clustered_nodes = set().union(*[set(cluster) for cluster in all_clusters])
     unclustered_nodes = set(G.nodes) - all_clustered_nodes
 
     for node in unclustered_nodes:
         best_cluster = None
-        best_conductance = float('inf')  # Comenzar con una conductancia alta (peor de los casos)
-        
-        # Evaluar la conductancia del nodo con respecto a cada grupo
-        for cluster in all_clusters:
-            if len(cluster) < h:  # Asegurar que el clúster no haya excedido el límite de tamaño
-                
-                # Comprobar si el nodo tiene vecinos en el clúster
-                neighbors_in_cluster = [neighbor for neighbor in G.neighbors(node) if neighbor in cluster]
-                if neighbors_in_cluster:  # Solo considerar los clústeres donde el nodo tenga vecinos directos
-                    # Calcular la conductancia entre el nodo y el cluster
-                    cond = conductance(G, cluster, {node})
-                    
-                    if cond < best_conductance:
-                        best_conductance = cond
-                        best_cluster = cluster
+        best_conductance = float('inf')
 
-        # Assign the node to the best connected cluster
+        for idx, cluster in enumerate(all_clusters):
+            if blocked_clusters[idx]:  # Saltar clusters bloqueados
+                continue
+            if len(cluster) < h:
+                cond = conductance(G, cluster, {node})
+                if cond < best_conductance:
+                    best_conductance = cond
+                    best_cluster = cluster
+
         if best_cluster is not None:
             best_cluster.add(node)
-        else:
-            # Si no se encuentra ningún clúster adecuado (caso muy raro), asígnarlo a un clúster con al menos una conexión directa
-            # Evitamos crear nuevos clústeres innecesariamente, por lo que elegimos un clúster con vecinos directos.
-            for cluster in all_clusters:
-                if any(neighbor in cluster for neighbor in G.neighbors(node)):
-                    best_cluster = cluster
-                    best_cluster.add(node)
-                    break
-    
-    # Combinar grupos pequeños si es necesario
-    combined_clusters = combine_small_clusters(all_clusters, l, h, G, pivots)
-    return combined_clusters
 
-def reassign_nodes_based_on_distance(G, all_clusters, pivots):
-    """
-    Reanaliza las asignaciones de nodos y los reasigna al clúster con menor distancia al pivote si es necesario.
-    """
-    # Convertir los clusters en listas de conjuntos si son subgrafos
-    all_clusters = [set(cluster.nodes) if isinstance(cluster, nx.Graph) else set(cluster) for cluster in all_clusters]
-
-    # Precomputar distancias a pivotes
+    # Segunda pasada: Reasignar nodos considerando caminos mínimos a los pivotes
     distances_to_pivots = {pivot: nx.single_source_shortest_path_length(G, pivot) for pivot in pivots}
 
     for cluster_idx, cluster in enumerate(all_clusters):
-        nodes_to_reassign = set(cluster)  # Copia de los nodos del cluster
+        if cluster_idx >= len(pivots):
+            print(f"Advertencia: El índice {cluster_idx} excede la longitud de pivots. Verifica los datos de entrada.")
+            continue  # Saltar clusters que no tienen pivote asociado
 
-        for node in nodes_to_reassign:
+        nodes_to_check = list(cluster)  # Copia de los nodos para evitar modificar el conjunto mientras iteramos
+
+        for node in nodes_to_check:
             best_cluster = cluster
-            best_distance = distances_to_pivots[pivots[cluster_idx]].get(node, float('inf'))
+            best_distance = distances_to_pivots.get(pivots[cluster_idx], {}).get(node, float('inf'))
 
-            # Evaluar si pertenece a otro cluster
+            # Evaluar si pertenece a otro clúster
             for idx, pivot in enumerate(pivots):
-                if idx != cluster_idx:  # No comparar con el cluster actual
-                    distance_to_pivot = distances_to_pivots[pivot].get(node, float('inf'))
+                if idx != cluster_idx and not blocked_clusters[idx]:  # No comparar con el clúster actual ni con bloqueados
+                    distance_to_pivot = distances_to_pivots.get(pivot, {}).get(node, float('inf'))
                     if distance_to_pivot < best_distance:
                         best_distance = distance_to_pivot
                         best_cluster = all_clusters[idx]
@@ -418,7 +403,6 @@ def reassign_nodes_based_on_distance(G, all_clusters, pivots):
                 best_cluster.add(node)
 
     return all_clusters
-
 
 
 def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
@@ -440,6 +424,8 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     din_G = G.copy()
     l_values = [int(h - (h * delta)) for h in h_values]  # Calcula l dinámicamente para cada h en h_values
     num_clusters = len(h_values)
+    blocked_clusters = [False] * num_clusters  # Inicialmente, ningún cluster está bloqueado
+
     
     # Seleccionar pivotes si no se proporciona q_list
     q_list = select_pivots(G, num_clusters)
@@ -447,7 +433,7 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     # Paso 1: Generar clusters iniciales para cada nodo pivote
     for idx, q in enumerate(q_list):
         cluster_nodes = set([q])  # Incluir q en el cluster desde el inicio
-        if q in din_G.nodes:
+        if q in din_G.nodes:  # Verificar si el nodo está en el grafo
             trussness = truss_decomposition(din_G)
             H = GC_Final(din_G, q, l_values[idx], h_values[idx], trussness)
             H_nodes_filtered = {n for n in H.nodes if n not in assigned_nodes}
@@ -461,21 +447,41 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
                 cluster_nodes.update(H_nodes_filtered)
                 din_G.remove_nodes_from(H_nodes_filtered)
             else:
-                print(f"El cluster de q={q} es menor al tamaño mínimo requerido.")
+                print(f"El cluster de q={q} es menor al tamaño mínimo requerido. Asignando al menos el nodo pivote.")
 
         # Aseguramos que el cluster tenga al menos el nodo q
         if not cluster_nodes:
             cluster_nodes.add(q)
 
+        # Si aún no se asignaron suficientes nodos, forzar la asignación de vecinos más cercanos
+        if len(cluster_nodes) < l_values[idx]:
+            if q in din_G.nodes:  # Verificar nuevamente antes de acceder a los vecinos
+                neighbors = set(din_G.neighbors(q)) - assigned_nodes
+                needed_nodes = l_values[idx] - len(cluster_nodes)
+                additional_nodes = list(neighbors)[:needed_nodes]  # Seleccionar nodos vecinos
+                cluster_nodes.update(additional_nodes)
+                assigned_nodes.update(additional_nodes)
+                din_G.remove_nodes_from(additional_nodes)
+            else:
+                print(f"El nodo {q} ya no está en el grafo. No se pueden asignar más nodos vecinos.")
+
+        # Asegurar que cada cluster tenga nodos y agregarlo a final_clusters
         final_clusters.append(cluster_nodes)
-    
+
+    # Validar que se crearon exactamente el número de clusters requeridos
+    if len(final_clusters) < num_clusters:
+        print(f"Advertencia: Solo se generaron {len(final_clusters)} clusters en el paso inicial. Creando clusters vacíos adicionales.")
+        while len(final_clusters) < num_clusters:
+            final_clusters.append(set())
+
+
     # Paso 2: Asignar nodos no clusterizados antes de las iteraciones
     all_clustered_nodes = set.union(*[set(cluster) for cluster in final_clusters])
     unclustered_nodes = set(G.nodes()) - all_clustered_nodes
 
     if unclustered_nodes:
         print(f"Asignando nodos no clusterizados iniciales: {len(unclustered_nodes)} nodos.")
-        final_clusters = assign_unclustered_nodes(G, final_clusters, min(l_values), max(h_values), q_list)
+        final_clusters = assign_unclustered_nodes(G, final_clusters, min(l_values), max(h_values), q_list, blocked_clusters)
 
     # Refinar clusters en iteraciones
     iteration = 0
@@ -492,10 +498,22 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
         temp_h_values = []
 
         # Refinar cada cluster para cumplir con los tamaños l y h específicos
+        balance_needed = 0
         for idx, cluster in enumerate(final_clusters):
             print(f"Iteración {iteration}, Cluster {idx}: Tamaño actual: {len(cluster)}")
+            
+            # Verificar si el cluster ya cumple con el tamaño objetivo
+            if remaining_l_values[idx] <= len(cluster) <= remaining_h_values[idx]:
+                refined_clusters.append(cluster)
+                temp_l_values.append(remaining_l_values[idx])
+                temp_h_values.append(remaining_h_values[idx])
+                blocked_clusters[idx] = True  # Bloquear el cluster
+                print(f"Cluster {idx} bloqueado: cumple con el tamaño objetivo.")
+                continue
+
+            # Si el cluster es demasiado pequeño, intentar combinar o rellenar
             if len(cluster) < remaining_l_values[idx]:
-                # Intentar combinar clusters pequeños o rellenarlos
+                balance_needed = 1
                 if len(refined_clusters) == 0:
                     refined_clusters.extend(
                         combine_small_clusters(
@@ -510,24 +528,32 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
                             combine_clusters, remaining_l_values[idx], remaining_h_values[idx], G, q_list
                         )
                     )
+            # Si el cluster es demasiado grande, dividirlo
             elif len(cluster) > remaining_h_values[idx] and (len(final_clusters) < num_clusters and idx == 0):
-                # Dividir clusters grandes
+                balance_needed = 1
                 print("num ref clus: ", len(final_clusters), ", clusters: ", num_clusters)
                 refined_clusters.extend(
                     split_large_clusters([cluster], remaining_h_values[idx], G)
                 )
             else:
                 # Cluster refinado, agregarlo a refined_clusters
+                balance_needed = 1
                 refined_clusters.append(cluster)
-                # Guardar restricciones de tamaño para clusters no procesados
                 temp_l_values.append(remaining_l_values[idx])
                 temp_h_values.append(remaining_h_values[idx])
+
+        # Ajustar blocked_clusters después de combinar o dividir clusters
+        if len(refined_clusters) > len(blocked_clusters):
+            blocked_clusters.extend([False] * (len(refined_clusters) - len(blocked_clusters)))
+        elif len(refined_clusters) < len(blocked_clusters):
+            blocked_clusters = blocked_clusters[:len(refined_clusters)]
 
         # Actualizar restricciones restantes
         remaining_l_values = temp_l_values
         remaining_h_values = temp_h_values
 
-        final_clusters = assign_unclustered_nodes(G, refined_clusters, min(l_values), max(h_values), q_list)
+        # Llamar a assign_unclustered_nodes
+        final_clusters = assign_unclustered_nodes(G, refined_clusters, min(l_values), max(h_values), q_list, blocked_clusters)
         
         # Asegurarse de tener la cantidad de clusters exacta
         if len(final_clusters) < num_clusters:
@@ -542,6 +568,7 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
         if not unclustered_nodes:
             break
         print(f"Iteración {iteration}: Nodos sin cluster: {len(unclustered_nodes)}.")
+
 
 
     # Paso 3: Asignar nodos restantes si es necesario
@@ -559,8 +586,9 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     while len(final_clusters) < num_clusters:
         final_clusters.append(G.subgraph(set()))
 
-    final_clusters = reassign_nodes_based_on_distance(G, final_clusters, q_list)
-    final_clusters = [G.subgraph(cluster).copy() for cluster in final_clusters]
+    for idx, cluster in enumerate(final_clusters):
+        if blocked_clusters[idx]:
+            assert remaining_l_values[idx] <= len(cluster) <= remaining_h_values[idx], f"Cluster {idx} modificado indebidamente."
 
 
     return final_clusters
