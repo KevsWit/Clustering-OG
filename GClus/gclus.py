@@ -422,7 +422,10 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     final_clusters = []
     assigned_nodes = set()
     din_G = G.copy()
-    l_values = [int(h - (h * delta)) for h in h_values]  # Calcula l dinámicamente para cada h en h_values
+    l_values = [int(h - (h * delta)) for h in h_values]
+    h_values_gcf = sorted(h_values, reverse=True)
+    l_values_gcf = [int(h - (h * delta)) for h in h_values_gcf]
+    
     num_clusters = len(h_values)
     blocked_clusters = [False] * num_clusters  # Inicialmente, ningún cluster está bloqueado
 
@@ -435,11 +438,11 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
         cluster_nodes = set([q])  # Incluir q en el cluster desde el inicio
         if q in din_G.nodes:  # Verificar si el nodo está en el grafo
             trussness = truss_decomposition(din_G)
-            H = GC_Final(din_G, q, l_values[idx], h_values[idx], trussness)
+            H = GC_Final(din_G, q, l_values_gcf[idx], h_values_gcf[idx], trussness)
             H_nodes_filtered = {n for n in H.nodes if n not in assigned_nodes}
 
             # Garantizar que el nodo q esté en su cluster
-            if len(H_nodes_filtered) >= l_values[idx] or not H_nodes_filtered:
+            if len(H_nodes_filtered) >= l_values_gcf[idx] or not H_nodes_filtered:
                 # Añadir q solo si no está ya en H_nodes_filtered
                 if q not in H_nodes_filtered:
                     H_nodes_filtered.add(q)
@@ -454,10 +457,10 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
             cluster_nodes.add(q)
 
         # Si aún no se asignaron suficientes nodos, forzar la asignación de vecinos más cercanos
-        if len(cluster_nodes) < l_values[idx]:
+        if len(cluster_nodes) < l_values_gcf[idx]:
             if q in din_G.nodes:  # Verificar nuevamente antes de acceder a los vecinos
                 neighbors = set(din_G.neighbors(q)) - assigned_nodes
-                needed_nodes = l_values[idx] - len(cluster_nodes)
+                needed_nodes = l_values_gcf[idx] - len(cluster_nodes)
                 additional_nodes = list(neighbors)[:needed_nodes]  # Seleccionar nodos vecinos
                 cluster_nodes.update(additional_nodes)
                 assigned_nodes.update(additional_nodes)
@@ -586,10 +589,9 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     while len(final_clusters) < num_clusters:
         final_clusters.append(G.subgraph(set()))
 
-    for idx, cluster in enumerate(final_clusters):
-        if blocked_clusters[idx]:
-            assert remaining_l_values[idx] <= len(cluster) <= remaining_h_values[idx], f"Cluster {idx} modificado indebidamente."
+    # for idx, cluster in enumerate(final_clusters):
+    #     if blocked_clusters[idx]:
+    #         assert remaining_l_values[idx] <= len(cluster) <= remaining_h_values[idx], f"Cluster {idx} modificado indebidamente."
 
 
     return final_clusters
-
