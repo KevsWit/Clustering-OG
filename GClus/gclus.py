@@ -502,33 +502,3 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
 
 
     return final_clusters
-
-
-def combine_clusters_to_fit(clusters, h_values):
-    """
-    Combina clusters pequeños para reducir la cantidad de clusters, buscando
-    generar clusters cercanos al tamaño especificado en h_values.
-    """
-    combined_clusters = []
-    while len(clusters) > len(h_values):
-        clusters = sorted(clusters, key=len)  # Ordenar por tamaño
-        smallest_cluster = clusters.pop(0)  # Extraer el cluster más pequeño
-        closest_cluster = None
-        closest_size = float('inf')
-
-        # Buscar el cluster más cercano en tamaño para combinar
-        for idx, cluster in enumerate(clusters):
-            combined_size = len(smallest_cluster) + len(cluster)
-            if combined_size <= max(h_values) and abs(combined_size - max(h_values)) < closest_size:
-                closest_size = abs(combined_size - max(h_values))
-                closest_cluster = idx
-
-        # Combinar clusters si se encontró uno adecuado
-        if closest_cluster is not None:
-            clusters[closest_cluster] = clusters[closest_cluster].union(smallest_cluster)
-        else:
-            combined_clusters.append(smallest_cluster)
-
-    combined_clusters.extend(clusters)
-    return combined_clusters
-
