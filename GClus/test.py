@@ -63,7 +63,7 @@ pca = PCA(n_components=2)
 data = pca.fit_transform(scaled_adj_matrix)
 
 # Número de clusters deseados
-K = 4
+K = 2
 
 # Ejecutar el algoritmo SMKNN
 clusters, labels = cluster(data, K)
@@ -104,7 +104,7 @@ ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 h_values = [10,5,9,10]
 # h_values = [1,3,10,15,5]
 # h_values = [7,17,10]
-# h_values = [10,24]
+# h_values = [16,18]
 # h_values = [7,27]
 delta = 0.1
 
@@ -281,5 +281,3 @@ total_dev, avg_dev, perc_dev = calculate_deviation(h_values, cluster_counts)
 # print(f"NMI AS: {nmi_as}")
 
 # # visualize_clusters(G, clusters)
-
-
