@@ -314,8 +314,7 @@ analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 print("########################### les miserables")
 
 # Load the miserables graph
-miserables_path = os.path.join(base_path, 'lesmiserables.gml')
-G = nx.read_gml(miserables_path)
+G = nx.les_miserables_graph()
 
 # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
 analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
