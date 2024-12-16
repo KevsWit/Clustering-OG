@@ -8,27 +8,44 @@ import pymetis
 import numpy as np
 import copy
 from networkx.algorithms.community import modularity
+from pyvis.network import Network
+import networkx as nx
+
 
 __author__ = """Kevin Castillo (kev.gcastillo@outlook.com)"""
 #    Copyright (C) 2024 by
 #    Kevin Castillo <kev.gcastillo@outlook.com>
 #    All rights reserved.
 
+def visualize_clusters(G, clusters, output_path="clusters_graph.html"):
+    """
+    Visualiza el grafo en base a los clusters usando Pyvis.
+    
+    Parámetros:
+        G (networkx.Graph): El grafo a visualizar.
+        clusters (list of sets): Lista de clusters donde cada cluster es un conjunto de nodos.
+        output_path (str): Ruta del archivo HTML de salida.
+    """
+    net = Network(height="750px", width="100%", bgcolor="#222222", font_color="white", notebook=False)
 
-def visualize_clusters(G, clusters):
-    """Visualiza el grafo en base a los clusters generados."""
-    pos = nx.spring_layout(G)  # Layout para los nodos
-    cmap = plt.get_cmap('viridis')  # Colormap para los colores
+    # Paleta de colores predefinida
+    color_palette = ['red', 'blue', 'green', 'orange', 'purple', 'cyan']
+    node_colors = {}
 
-    # Asignar un color único a cada cluster
+    # Asignar colores a los nodos en función del cluster
     for i, cluster in enumerate(clusters):
-        color = cmap(i / len(clusters))
-        nx.draw_networkx_nodes(G, pos, nodelist=list(cluster.nodes), node_size=300, node_color=[color] * len(cluster.nodes))
+        color = color_palette[i % len(color_palette)]
+        for node in cluster:
+            node_colors[node] = color
+            net.add_node(node, label=str(node), color=color)
 
-    # Dibujar aristas y etiquetas
-    nx.draw_networkx_edges(G, pos, alpha=0.5)
-    nx.draw_networkx_labels(G, pos)
-    plt.show()
+    # Añadir las aristas
+    for edge in G.edges():
+        net.add_edge(edge[0], edge[1])
+
+    # Guardar y mostrar el archivo HTML interactivo
+    net.write_html(output_path)
+    print(f"Grafo guardado en {output_path}")
 
 
 def select_pivots(G, num_pivots):
@@ -372,7 +389,7 @@ def assign_unclustered_nodes(G, all_clusters, l, h, pivots, blocked_clusters):
         best_conductance = float('inf')
 
         for idx, cluster in enumerate(all_clusters):
-            if blocked_clusters[idx]:  # Saltar clusters bloqueados
+            if idx < len(blocked_clusters) and blocked_clusters[idx]:  # Saltar clusters bloqueados
                 continue
             if len(cluster) < h:
                 cond = conductance(G, cluster, {node})
@@ -398,7 +415,7 @@ def assign_unclustered_nodes(G, all_clusters, l, h, pivots, blocked_clusters):
 
             # Evaluar si pertenece a otro clúster
             for idx, pivot in enumerate(pivots):
-                if idx != cluster_idx and not blocked_clusters[idx]:  # No comparar con el clúster actual ni con bloqueados
+                if idx != cluster_idx and idx < len(blocked_clusters) and not blocked_clusters[idx]:  
                     distance_to_pivot = distances_to_pivots.get(pivot, {}).get(node, float('inf'))
                     if distance_to_pivot < best_distance:
                         best_distance = distance_to_pivot
@@ -410,6 +427,7 @@ def assign_unclustered_nodes(G, all_clusters, l, h, pivots, blocked_clusters):
                 best_cluster.add(node)
 
     return all_clusters
+
 
 
 def adjust_clusters_to_h_values(G, clusters, h_values):
