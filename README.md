@@ -43,6 +43,7 @@ Librerías: networkx, matplotlib, scikit-learn, pymetis.
    pip install networkx
    pip install matplotlib
    pip install scikit-learn
+   pip install pyvis
    conda update conda
    conda install conda-forge::pymetis
     ```
