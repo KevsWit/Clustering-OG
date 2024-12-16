@@ -288,10 +288,16 @@ def combine_small_clusters(clusters, l, h, G, pivots):
         for i, cluster in enumerate(remaining_clusters):
             if any(node in pivots for node in cluster):
                 continue
-            conductance_value = conductance(G, cluster_to_combine, cluster)
-            if conductance_value > best_conductance:
-                best_conductance = conductance_value
-                best_merge = i
+            
+            # Verificar que ambos clusters tengan volumen > 0 antes de calcular conductance
+            if len(cluster_to_combine) > 0 and len(cluster) > 0:
+                try:
+                    conductance_value = conductance(G, cluster_to_combine, cluster)
+                    if conductance_value > best_conductance:
+                        best_conductance = conductance_value
+                        best_merge = i
+                except ZeroDivisionError:
+                    continue
 
         if best_merge is not None:
             merged_cluster = cluster_to_combine.union(remaining_clusters.pop(best_merge))
@@ -306,6 +312,7 @@ def combine_small_clusters(clusters, l, h, G, pivots):
                 assigned_nodes.update(cluster_to_combine)
 
     return combined_clusters
+
 
 
 def split_large_clusters(clusters, h, G):
