@@ -513,6 +513,7 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     final_clusters = []
     assigned_nodes = set()
     din_G = G.copy()
+    h_values = [round(h) for h in h_values]
     l_values = [int(h - (h * delta)) for h in h_values]  # Calcula l dinámicamente para cada h en h_values
     num_clusters = len(h_values)
     blocked_clusters = [False] * num_clusters  # Inicialmente, ningún cluster está bloqueado
@@ -578,9 +579,16 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     iteration = 0
     remaining_l_values = l_values.copy()  # Inicializar las restricciones dinámicas al inicio
     remaining_h_values = h_values.copy()
+    
 
     while iteration < max_iterations:
         iteration += 1
+
+        # Ajustar restricciones dinámicas al número actual de clusters
+        remaining_l_values = remaining_l_values[:len(final_clusters)] + [min(l_values)] * (len(final_clusters) - len(remaining_l_values))
+        remaining_h_values = remaining_h_values[:len(final_clusters)] + [max(h_values)] * (len(final_clusters) - len(remaining_h_values))
+
+
         refined_clusters = []
         combine_clusters = []
 
