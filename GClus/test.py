@@ -283,9 +283,9 @@ print(f"Desviación promedio: {avg_deviation:.2f}")
 
 print("########################### les miserables")
 
-# Load the Football graph
-football_path = os.path.join(base_path, 'lesmiserables.gml')
-G = nx.read_gml(football_path)
+# Load the miserables graph
+miserables_path = os.path.join(base_path, 'lesmiserables.gml')
+G = nx.read_gml(miserables_path)
 
 # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
 analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
