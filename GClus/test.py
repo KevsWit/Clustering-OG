@@ -129,7 +129,6 @@ def gclus_modularidades(k, G, delta=0.1, repetitions=10):
     # Promedio de modularidades
     return total_modularity / repetitions
 
-import matplotlib.pyplot as plt
 
 def analisis_modularidad(k_list, G, repetitions=10, delta=0.1):
     """
@@ -186,6 +185,40 @@ def analisis_modularidad(k_list, G, repetitions=10, delta=0.1):
     plt.show()
 
 
+def analisis_desviaciones(k_list, G, repetitions=10, delta=0.1):
+    """
+    Analiza las desviaciones promedio obtenidas por GCLUS para diferentes valores de k en un grafo dado.
+
+    Parámetros:
+        k_list (list): Lista de valores de k (número de clusters) a probar.
+        G (networkx.Graph): Grafo sobre el cual se realizarán las pruebas.
+        repetitions (int): Número de repeticiones para GCLUS.
+        delta (float): Parámetro delta para GCLUS.
+
+    Retorna:
+        None: Muestra un gráfico comparativo de las desviaciones promedio.
+    """
+    gclus_avg_deviations = []  # Lista para almacenar las desviaciones promedio por cada k
+
+    for k in k_list:
+        # Calcular desviación promedio usando gclus_desviaciones
+        avg_deviation = gclus_desviaciones(k=k, G=G, repetitions=repetitions, delta=delta)
+        gclus_avg_deviations.append(avg_deviation)
+
+        print(f"k={k}: GCLUS Desviación Promedio={avg_deviation:.4f}")
+
+    # Graficar resultados
+    plt.figure(figsize=(10, 6))
+    plt.plot(k_list, gclus_avg_deviations, marker='o', linestyle='-', color='tab:blue', label='GCLUS Desviación Promedio')
+    plt.title("Desviación Promedio de GCLUS para Diferentes Valores de k")
+    plt.xlabel("Número de Clusters (k)")
+    plt.ylabel("Desviación Promedio")
+    plt.xticks(k_list)
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+
 # Define the base path to the test files
 base_path = os.path.join('test')
 
@@ -233,7 +266,7 @@ base_path = os.path.join('test')
 
 # ########################### karate
 
-# print("########################### karate")
+print("########################### karate")
 
 # Load the Karate Club graph
 karate_path = os.path.join(base_path, 'karate.gml')
@@ -242,9 +275,8 @@ G = nx.read_gml(karate_path)
 # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
 analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
-# # Calcular desviaciones promedio
-avg_deviation = gclus_desviaciones(k=2, G=G, repetitions=10)
-print(f"Desviación promedio: {avg_deviation:.2f}")
+# Ejecutar la función de análisis
+analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
 
 # ########################### dolphins
@@ -258,9 +290,8 @@ G = nx.read_gml(dolphins_path)
 # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
 analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
-# # Calcular desviaciones promedio
-avg_deviation = gclus_desviaciones(k=2, G=G, repetitions=10)
-print(f"Desviación promedio: {avg_deviation:.2f}")
+# Ejecutar la función de análisis
+analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
 
 # ########################### pol_books
@@ -274,9 +305,8 @@ G = nx.read_gml(polbooks_path)
 # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
 analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
-# # Calcular desviaciones promedio
-avg_deviation = gclus_desviaciones(k=2, G=G, repetitions=10)
-print(f"Desviación promedio: {avg_deviation:.2f}")
+# Ejecutar la función de análisis
+analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
 
 ########################### les miserables
@@ -290,9 +320,8 @@ G = nx.read_gml(miserables_path)
 # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
 analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
-# # Calcular desviaciones promedio
-avg_deviation = gclus_desviaciones(k=2, G=G, repetitions=10)
-print(f"Desviación promedio: {avg_deviation:.2f}")
+# Ejecutar la función de análisis
+analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
 
 # ########################### SMKNN
@@ -344,11 +373,7 @@ print(f"Desviación promedio: {avg_deviation:.2f}")
 # ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
 
 # # Configuración
-# h_values = [30,20,5,60]
-# # h_values = [50,20,15,20,10]
-# # h_values = [42,28,45]
-# # h_values = [70,45]
-# # h_values = [62,53]
+# h_values = [7,17,10]
 # delta = 0.1
 
 # # Ejecutar la función
@@ -384,3 +409,25 @@ print(f"Desviación promedio: {avg_deviation:.2f}")
 
 # # Calcular y mostrar las métricas de desviación
 # total_dev, avg_dev, perc_dev = calculate_deviation(h_values, cluster_counts)
+
+
+
+
+########### impresion
+# karate_path = os.path.join(base_path, 'karate.gml')
+# G = nx.read_gml(karate_path)
+
+# # Configuración
+# h_values = [7,17,10]
+# delta = 0.1
+
+# # Ejecutar la función
+# clusters = multi_cluster_GCLUS(G, h_values, delta)
+
+# # Contar nodos en cada cluster predicho
+# cluster_counts = {i + 1: len(cluster.nodes) for i, cluster in enumerate(clusters)}
+# print("\nCluster sizes:")
+# for cluster_id, count in cluster_counts.items():
+#     print(f"Cluster {cluster_id}: {count} nodes")
+
+# visualize_clusters(G, clusters)
