@@ -430,9 +430,9 @@ def assign_unclustered_nodes(G, all_clusters, l, h, pivots, blocked_clusters):
 
 
 
-def adjust_clusters_to_h_values(G, clusters, h_values):
+def adjust_clusters(G, clusters, h_values):
     """
-    Ajusta los clusters para que se alineen con los tamaños especificados en h_values.
+    Ajusta los clusters para que se alineen con los tamaños especificados.
     Garantiza que los nodos reasignados mantengan conexiones directas al nuevo cluster.
     """
     # Asegurar que h_values coincida con la cantidad de clusters
@@ -687,7 +687,7 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
                 smallest_cluster.add(node)
 
     # Ajustar tamaños y reasignar nodos según los valores deseados en h_values
-    final_clusters = adjust_clusters_to_h_values(G, final_clusters, h_values)
+    final_clusters = adjust_clusters(G, final_clusters, h_values)
 
 
     # Convertimos los clusters a subgrafos y eliminamos clusters vacíos
