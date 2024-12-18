@@ -675,8 +675,8 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
             if len(smallest_cluster) < h_values[final_clusters.index(smallest_cluster)]:
                 smallest_cluster.add(node)
 
-    # # Ajustar tamaños y reasignar nodos según los valores deseados en h_values
-    # final_clusters = adjust_clusters(G, final_clusters, h_values)
+    # Ajustar tamaños y reasignar nodos según los valores deseados en h_values
+    final_clusters = adjust_clusters(G, final_clusters, h_values)
 
 
     # Convertimos los clusters a subgrafos y eliminamos clusters vacíos
