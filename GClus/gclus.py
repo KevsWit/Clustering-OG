@@ -429,7 +429,6 @@ def assign_unclustered_nodes(G, all_clusters, l, h, pivots, blocked_clusters):
     return all_clusters
 
 
-
 def adjust_clusters(G, clusters, h_values):
     """
     Ajusta los clusters para que se alineen con los tamaños especificados.
@@ -439,21 +438,21 @@ def adjust_clusters(G, clusters, h_values):
     if len(h_values) != len(clusters):
         h_values = h_values[:len(clusters)] + [max(h_values)] * (len(clusters) - len(h_values))
 
-    if len(h_values) == 2:
-        for idx, h in enumerate(h_values):
-            while len(clusters[idx]) > h:  # Si el cluster excede el tamaño deseado
+    for idx, h in enumerate(h_values):
+        while len(clusters[idx]) > h:  # Si el cluster excede el tamaño deseado
+            # Paso 1: Seleccionar nodo para extraer (menor conectividad interna)
+            node_to_remove = min(
+                clusters[idx],
+                key=lambda n: len(set(G.neighbors(n)) & clusters[idx])
+            )
+            clusters[idx].remove(node_to_remove)
 
-                # Paso 1: Seleccionar nodo para extraer (menor conectividad interna)
-                node_to_remove = min(
-                    clusters[idx],
-                    key=lambda n: len(set(G.neighbors(n)) & clusters[idx])
-                )
-                clusters[idx].remove(node_to_remove)
+            # Paso 2: Inicializar variables
+            best_cluster = None
+            best_distance = float('inf')
 
-                # Paso 2: Primera pasada - Reasignar a clusters con conexión directa
-                best_cluster = None
-                best_distance = float('inf')
-
+            # Si hay solo dos clusters, priorizar el flujo alternativo
+            if len(h_values) == 2:
                 for j, cluster in enumerate(clusters):
                     if j == idx or len(cluster) >= h_values[j]:  # No reasignar al mismo cluster ni a clusters llenos
                         continue
@@ -480,21 +479,9 @@ def adjust_clusters(G, clusters, h_values):
                     # Si no hay un cluster adecuado, devolver al cluster original
                     clusters[idx].add(node_to_remove)
                     break  # Salir para evitar bucles infinitos
-    else:
-        for idx, h in enumerate(h_values):
-            while len(clusters[idx]) > h:  # Si el cluster excede el tamaño deseado
 
-                # Paso 1: Seleccionar nodo para extraer (menor conectividad interna)
-                node_to_remove = min(
-                    clusters[idx],
-                    key=lambda n: len(set(G.neighbors(n)) & clusters[idx])
-                )
-                clusters[idx].remove(node_to_remove)
-
-                # Paso 2: Primera pasada - Reasignar a clusters con conexión directa
-                best_cluster = None
-                best_distance = float('inf')
-
+            # Caso general: más de dos clusters
+            else:
                 for j, cluster in enumerate(clusters):
                     if j == idx or len(cluster) >= h_values[j]:  # No reasignar al mismo cluster ni a clusters llenos
                         continue
@@ -512,7 +499,9 @@ def adjust_clusters(G, clusters, h_values):
 
                 # Reasignar el nodo al cluster con conexión directa
                 best_cluster.add(node_to_remove)
+
     return clusters
+
 
 
 def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
@@ -686,8 +675,8 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
             if len(smallest_cluster) < h_values[final_clusters.index(smallest_cluster)]:
                 smallest_cluster.add(node)
 
-    # Ajustar tamaños y reasignar nodos según los valores deseados en h_values
-    final_clusters = adjust_clusters(G, final_clusters, h_values)
+    # # Ajustar tamaños y reasignar nodos según los valores deseados en h_values
+    # final_clusters = adjust_clusters(G, final_clusters, h_values)
 
 
     # Convertimos los clusters a subgrafos y eliminamos clusters vacíos
