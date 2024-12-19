@@ -224,12 +224,70 @@ base_path = os.path.join('test')
 
 # ### Aplicacion
 
-# ########################### SMKNN
+#*********************************** Gráficas
 
-# # Crear datos de entrada para el algoritmo SMKNN (usar embeddings o características de nodos)
-# # Aquí usamos una matriz de adyacencia como entrada y reducimos dimensionalidad con PCA
+# ########################### SMKNN
+# # Load the Karate Club graph
+karate_path = os.path.join(base_path, 'karate.gml')
+G = nx.read_gml(karate_path)
+
+# Crear datos de entrada para el algoritmo SMKNN (usar embeddings o características de nodos)
+adj_matrix = nx.adjacency_matrix(G).toarray()
+scaler = StandardScaler()
+scaled_adj_matrix = scaler.fit_transform(adj_matrix)
+pca = PCA(n_components=2)
+data = pca.fit_transform(scaled_adj_matrix)
+
+# Número de clusters deseados
+K = 2
+
+# Ejecutar el algoritmo SMKNN
+clusters, labels = cluster(data, K)
+
+# Crear el diccionario de clusters con las etiquetas únicas generadas por SMKNN
+unique_labels = set(map(int, labels))  # Convertir las etiquetas a enteros y eliminar duplicados
+clusters_smk = {label: set() for label in unique_labels}  # Crear un diccionario con esas claves
+
+# Asignar nodos a los clusters
+for node, label in zip(G.nodes(), labels):
+    clusters_smk[int(label)].add(node)  # Convertir etiqueta a entero y agregar nodo
+
+# Convertir el diccionario a una lista de conjuntos para calcular la modularidad y visualización
+clusters_smk_list = list(clusters_smk.values())
+
+# Visualizar los resultados en el grafo interactivo con Pyvis
+visualize_clusters(G, clusters_smk_list, output_path="clusters_smknn_graph.html")
+
+# ########################### GCLUS
+
+# Configuración
+h_values = [16,18]
+delta = 0.1
+
+# Ejecutar la función
+clusters = multi_cluster_GCLUS(G, h_values, delta)
+
+# Contar nodos en cada cluster predicho
+cluster_counts = {i + 1: len(cluster.nodes) for i, cluster in enumerate(clusters)}
+print("\nCluster sizes:")
+for cluster_id, count in cluster_counts.items():
+    print(f"Cluster {cluster_id}: {count} nodes")
+
+visualize_clusters(G, clusters, output_path="clusters_gclus_graph.html")
+
+#*********************************** AMI
+
+# ########################### Karate
+
+# # ########################### SMKNN
+# # Load the Karate Club graph
 # karate_path = os.path.join(base_path, 'karate.gml')
 # G = nx.read_gml(karate_path)
+
+# # Extract the ground truth labels from the 'gt' field in the GML file
+# ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
+
+# # Crear datos de entrada para el algoritmo SMKNN (usar embeddings o características de nodos)
 # adj_matrix = nx.adjacency_matrix(G).toarray()
 # scaler = StandardScaler()
 # scaled_adj_matrix = scaler.fit_transform(adj_matrix)
@@ -250,77 +308,254 @@ base_path = os.path.join('test')
 # for node, label in zip(G.nodes(), labels):
 #     clusters_smk[int(label)].add(node)  # Convertir etiqueta a entero y agregar nodo
 
-# # Convertir el diccionario a una lista de conjuntos para calcular la modularidad
+# # Convertir el diccionario a una lista de conjuntos para calcular la modularidad y visualización
 # clusters_smk_list = list(clusters_smk.values())
 
-# # Visualizar los resultados en el grafo original
-# pos = nx.spring_layout(G, seed=42)  # Layout para visualización
-# colors = [plt.cm.tab10(int(label)) for label in labels]
+# # Convertir las etiquetas de SMKNN a cadenas para mantener consistencia con GCLUS
+# labels_str = [str(int(label)) for label in labels]  # Convertimos a entero y luego a cadena
 
-# plt.figure(figsize=(10, 7))
-# nx.draw_networkx_nodes(G, pos, node_color=colors, node_size=300, cmap='tab10')
-# nx.draw_networkx_edges(G, pos, alpha=0.5)
-# nx.draw_networkx_labels(G, pos, font_size=10)
-# plt.title("Clustering del grafo dolphins con SMKNN")
-# plt.show()
-
-# ########################### karate
-
-print("########################### karate")
-
-# Load the Karate Club graph
-karate_path = os.path.join(base_path, 'karate.gml')
-G = nx.read_gml(karate_path)
-
-# Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
-analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
-
-# Ejecutar la función de análisis
-analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+# # Calcular el AMI para SMKNN
+# ami_smknn = adjusted_mutual_info_score(ground_truth_labels, labels_str)
+# print(f"AMI SMKNN karate: {ami_smknn}")
 
 
-# ########################### dolphins
+# # ########################### GCLUS
 
-print("########################### dolphins")
+# # Configuración
+# h_values = [16, 18]
+# delta = 0.1
 
-# Load the Dolphins graph
-dolphins_path = os.path.join(base_path, 'dolphins.gml')
-G = nx.read_gml(dolphins_path)
+# # Ejecutar la función
+# clusters = multi_cluster_GCLUS(G, h_values, delta)
 
-# Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
-analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+# # Assign each node to a cluster ID
+# node_to_cluster = {}
+# for i, cluster in enumerate(clusters):
+#     for node in cluster.nodes:
+#         node_to_cluster[node] = i
 
-# Ejecutar la función de análisis
-analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+# # Crear las comunidades como una lista de conjuntos
+# communities = [set(cluster.nodes) for cluster in clusters]
+
+# # Etiquetas predichas basadas en el cluster
+# predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
+
+# # Contar nodos en cada cluster predicho
+# cluster_counts = {i + 1: len(cluster.nodes) for i, cluster in enumerate(clusters)}
+# print("\nCluster sizes:")
+# for cluster_id, count in cluster_counts.items():
+#     print(f"Cluster {cluster_id}: {count} nodes")
+
+# # Compute AMI between ground truth and predicted clusters
+# ami_gclus = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"AMI GCLUS karate: {ami_gclus}")
+
+# ########################### Dolphins
+
+# # ########################### SMKNN
+# # Load the Karate Club graph
+# dolphins_path = os.path.join(base_path, 'dolphins.gml')
+# G = nx.read_gml(dolphins_path)
+
+# # Extract the ground truth labels from the 'gt' field in the GML file
+# ground_truth_labels = [G.nodes[node]['gt'] for node in G.nodes()]
+
+# # Crear datos de entrada para el algoritmo SMKNN (usar embeddings o características de nodos)
+# adj_matrix = nx.adjacency_matrix(G).toarray()
+# scaler = StandardScaler()
+# scaled_adj_matrix = scaler.fit_transform(adj_matrix)
+# pca = PCA(n_components=2)
+# data = pca.fit_transform(scaled_adj_matrix)
+
+# # Número de clusters deseados
+# K = 2
+
+# # Ejecutar el algoritmo SMKNN
+# clusters, labels = cluster(data, K)
+
+# # Crear el diccionario de clusters con las etiquetas únicas generadas por SMKNN
+# unique_labels = set(map(int, labels))  # Convertir las etiquetas a enteros y eliminar duplicados
+# clusters_smk = {label: set() for label in unique_labels}  # Crear un diccionario con esas claves
+
+# # Asignar nodos a los clusters
+# for node, label in zip(G.nodes(), labels):
+#     clusters_smk[int(label)].add(node)  # Convertir etiqueta a entero y agregar nodo
+
+# # Convertir el diccionario a una lista de conjuntos para calcular la modularidad y visualización
+# clusters_smk_list = list(clusters_smk.values())
+
+# # Convertir las etiquetas de SMKNN a cadenas para mantener consistencia con GCLUS
+# labels_str = [str(int(label)) for label in labels]  # Convertimos a entero y luego a cadena
+
+# # Calcular el AMI para SMKNN
+# ami_smknn = adjusted_mutual_info_score(ground_truth_labels, labels_str)
+# print(f"AMI SMKNN dolphins: {ami_smknn}")
 
 
-# ########################### pol_books
+# # ########################### GCLUS
 
-print("########################### pol_books")
+# # Configuración
+# h_values = [42, 20]
+# delta = 0.1
 
-# Load the Political Books graph
-polbooks_path = os.path.join(base_path, 'polbooks.gml')
-G = nx.read_gml(polbooks_path)
+# # Ejecutar la función
+# clusters = multi_cluster_GCLUS(G, h_values, delta)
 
-# Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
-analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+# # Assign each node to a cluster ID
+# node_to_cluster = {}
+# for i, cluster in enumerate(clusters):
+#     for node in cluster.nodes:
+#         node_to_cluster[node] = i
 
-# Ejecutar la función de análisis
-analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+# # Crear las comunidades como una lista de conjuntos
+# communities = [set(cluster.nodes) for cluster in clusters]
+
+# # Etiquetas predichas basadas en el cluster
+# predicted_labels = [str(node_to_cluster[node] + 1) for node in G.nodes()]
+
+# # Contar nodos en cada cluster predicho
+# cluster_counts = {i + 1: len(cluster.nodes) for i, cluster in enumerate(clusters)}
+# print("\nCluster sizes:")
+# for cluster_id, count in cluster_counts.items():
+#     print(f"Cluster {cluster_id}: {count} nodes")
+
+# # Compute AMI between ground truth and predicted clusters
+# ami_gclus = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"AMI GCLUS dolphins: {ami_gclus}")
+
+# ########################### Polbooks
+
+# # ########################### SMKNN
+# # Load the Karate Club graph
+# polbooks_path = os.path.join(base_path, 'polbooks.gml')
+# G = nx.read_gml(polbooks_path)
+
+# # Extract the ground truth labels from the 'gt' field in the GML file
+# label_map = {'n': 0, 'c': 1, 'l': 2}
+# ground_truth_labels = [label_map[G.nodes[node]['gt']] for node in G.nodes()]
+
+# # Crear datos de entrada para el algoritmo SMKNN (usar embeddings o características de nodos)
+# adj_matrix = nx.adjacency_matrix(G).toarray()
+# scaler = StandardScaler()
+# scaled_adj_matrix = scaler.fit_transform(adj_matrix)
+# pca = PCA(n_components=2)
+# data = pca.fit_transform(scaled_adj_matrix)
+
+# # Número de clusters deseados
+# K = 3
+
+# # Ejecutar el algoritmo SMKNN
+# clusters, labels = cluster(data, K)
+
+# # Crear el diccionario de clusters con las etiquetas únicas generadas por SMKNN
+# unique_labels = set(map(int, labels))  # Convertir las etiquetas a enteros y eliminar duplicados
+# clusters_smk = {label: set() for label in unique_labels}  # Crear un diccionario con esas claves
+
+# # Asignar nodos a los clusters
+# for node, label in zip(G.nodes(), labels):
+#     clusters_smk[int(label)].add(node)  # Convertir etiqueta a entero y agregar nodo
+
+# # Convertir el diccionario a una lista de conjuntos para calcular la modularidad y visualización
+# clusters_smk_list = list(clusters_smk.values())
+
+# # Convertir las etiquetas de SMKNN a cadenas para mantener consistencia con GCLUS
+# labels_str = [int(label) for label in labels]  # Convertimos a entero y luego a cadena
+
+# # Calcular el AMI para SMKNN
+# ami_smknn = adjusted_mutual_info_score(ground_truth_labels, labels_str)
+# print(f"AMI SMKNN polbooks: {ami_smknn}")
 
 
-########################### les miserables
+# # ########################### GCLUS
 
-print("########################### les miserables")
+# # Configuración
+# h_values = [13,49,43]
+# delta = 0.1
 
-# Load the miserables graph
-G = nx.les_miserables_graph()
+# # Ejecutar la función
+# clusters = multi_cluster_GCLUS(G, h_values, delta)
 
-# Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
-analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+# # Assign each node to a cluster ID
+# node_to_cluster = {}
+# for i, cluster in enumerate(clusters):
+#     for node in cluster.nodes:
+#         node_to_cluster[node] = i
 
-# Ejecutar la función de análisis
-analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+# # Crear las comunidades como una lista de conjuntos
+# communities = [set(cluster.nodes) for cluster in clusters]
+
+# # Etiquetas predichas basadas en el cluster
+# predicted_labels = [node_to_cluster[node] for node in G.nodes()]
+
+# # Contar nodos en cada cluster predicho
+# cluster_counts = {i + 1: len(cluster.nodes) for i, cluster in enumerate(clusters)}
+# print("\nCluster sizes:")
+# for cluster_id, count in cluster_counts.items():
+#     print(f"Cluster {cluster_id}: {count} nodes")
+
+# # Compute AMI between ground truth and predicted clusters
+# ami_gclus = adjusted_mutual_info_score(ground_truth_labels, predicted_labels)
+# print(f"AMI GCLUS polbooks: {ami_gclus}")
+
+# #*********************************** Modularidad
+
+# # ########################### karate
+
+# print("########################### karate")
+
+# # Load the Karate Club graph
+# karate_path = os.path.join(base_path, 'karate.gml')
+# G = nx.read_gml(karate_path)
+
+# # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
+# analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+
+# # Ejecutar la función de análisis
+# analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+
+
+# # ########################### dolphins
+
+# print("########################### dolphins")
+
+# # Load the Dolphins graph
+# dolphins_path = os.path.join(base_path, 'dolphins.gml')
+# G = nx.read_gml(dolphins_path)
+
+# # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
+# analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+
+# # Ejecutar la función de análisis
+# analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+
+
+# # ########################### pol_books
+
+# print("########################### pol_books")
+
+# # Load the Political Books graph
+# polbooks_path = os.path.join(base_path, 'polbooks.gml')
+# G = nx.read_gml(polbooks_path)
+
+# # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
+# analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+
+# # Ejecutar la función de análisis
+# analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+
+
+# ########################### les miserables
+
+# print("########################### les miserables")
+
+# # Load the miserables graph
+# G = nx.les_miserables_graph()
+
+# # Ejecutar la comparación de modularidad para k = [2, 3, 4, 5]
+# analisis_modularidad(k_list=[2, 3, 4, 5], G=G, repetitions=10)
+
+# # Ejecutar la función de análisis
+# analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
 
 # ########################### SMKNN
@@ -408,25 +643,3 @@ analisis_desviaciones(k_list=[2, 3, 4, 5], G=G, repetitions=10)
 
 # # Calcular y mostrar las métricas de desviación
 # total_dev, avg_dev, perc_dev = calculate_deviation(h_values, cluster_counts)
-
-
-
-
-########### impresion
-# karate_path = os.path.join(base_path, 'karate.gml')
-# G = nx.read_gml(karate_path)
-
-# # Configuración
-# h_values = [7,17,10]
-# delta = 0.1
-
-# # Ejecutar la función
-# clusters = multi_cluster_GCLUS(G, h_values, delta)
-
-# # Contar nodos en cada cluster predicho
-# cluster_counts = {i + 1: len(cluster.nodes) for i, cluster in enumerate(clusters)}
-# print("\nCluster sizes:")
-# for cluster_id, count in cluster_counts.items():
-#     print(f"Cluster {cluster_id}: {count} nodes")
-
-# visualize_clusters(G, clusters)
