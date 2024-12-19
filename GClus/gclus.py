@@ -26,10 +26,10 @@ def visualize_clusters(G, clusters, output_path="clusters_graph.html"):
         clusters (list of sets): Lista de clusters donde cada cluster es un conjunto de nodos.
         output_path (str): Ruta del archivo HTML de salida.
     """
-    net = Network(height="750px", width="100%", bgcolor="#222222", font_color="white", notebook=False)
+    net = Network(height="750px", width="100%", bgcolor="#fff", font_color="black", notebook=False)
 
     # Paleta de colores predefinida
-    color_palette = ['red', 'blue', 'green', 'orange', 'purple', 'cyan']
+    color_palette = ['orange', 'blue', 'green', 'yellow', 'purple', 'cyan']
     node_colors = {}
 
     # Asignar colores a los nodos en función del cluster
