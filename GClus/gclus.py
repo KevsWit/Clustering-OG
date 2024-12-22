@@ -451,54 +451,33 @@ def adjust_clusters(G, clusters, h_values):
             best_cluster = None
             best_distance = float('inf')
 
-            # Si hay solo dos clusters, priorizar el flujo alternativo
-            if len(h_values) == 2:
+
+            for j, cluster in enumerate(clusters):
+                if j == idx or len(cluster) >= h_values[j]:  # No reasignar al mismo cluster ni a clusters llenos
+                    continue
+                if any(neighbor in cluster for neighbor in G.neighbors(node_to_remove)):
+                    distance = min(nx.shortest_path_length(G, node_to_remove, target) for target in cluster)
+                    if distance < best_distance:
+                        best_distance = distance
+                        best_cluster = cluster
+    
+            # Si no se encuentra un cluster en la primera pasada, buscar por caminos mínimos
+            if (not best_cluster) and len(h_values) == 2:
                 for j, cluster in enumerate(clusters):
-                    if j == idx or len(cluster) >= h_values[j]:  # No reasignar al mismo cluster ni a clusters llenos
+                    if j == idx or len(cluster) >= h_values[j]:
                         continue
-                    if any(neighbor in cluster for neighbor in G.neighbors(node_to_remove)):
-                        distance = min(nx.shortest_path_length(G, node_to_remove, target) for target in cluster)
-                        if distance < best_distance:
-                            best_distance = distance
-                            best_cluster = cluster
+                    distance = min(nx.shortest_path_length(G, node_to_remove, target) for target in cluster)
+                    if distance < best_distance:
+                        best_distance = distance
+                        best_cluster = cluster
 
-                # Si no se encuentra un cluster en la primera pasada, buscar por caminos mínimos
-                if not best_cluster:
-                    for j, cluster in enumerate(clusters):
-                        if j == idx or len(cluster) >= h_values[j]:
-                            continue
-                        distance = min(nx.shortest_path_length(G, node_to_remove, target) for target in cluster)
-                        if distance < best_distance:
-                            best_distance = distance
-                            best_cluster = cluster
-
-                # Reasignar el nodo
-                if best_cluster:
-                    best_cluster.add(node_to_remove)
-                else:
-                    # Si no hay un cluster adecuado, devolver al cluster original
-                    clusters[idx].add(node_to_remove)
-                    break  # Salir para evitar bucles infinitos
-
-            # Caso general: más de dos clusters
-            else:
-                for j, cluster in enumerate(clusters):
-                    if j == idx or len(cluster) >= h_values[j]:  # No reasignar al mismo cluster ni a clusters llenos
-                        continue
-                    # Verificar que haya una conexión directa al menos con un nodo en el cluster
-                    if any(neighbor in cluster for neighbor in G.neighbors(node_to_remove)):
-                        distance = min(nx.shortest_path_length(G, node_to_remove, target) for target in cluster)
-                        if distance < best_distance:
-                            best_distance = distance
-                            best_cluster = cluster
-
-                # Si no se encuentra un cluster en la primera pasada, ignorar la reasignación
-                if not best_cluster:
-                    clusters[idx].add(node_to_remove)  # Devolver al cluster original
-                    break
-
-                # Reasignar el nodo al cluster con conexión directa
+            # Reasignar el nodo
+            if best_cluster:
                 best_cluster.add(node_to_remove)
+            else:
+                # Si no hay un cluster adecuado, devolver al cluster original
+                clusters[idx].add(node_to_remove)
+                break  # Salir para evitar bucles infinitos
 
     return clusters
 
@@ -521,7 +500,7 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     final_clusters = []
     assigned_nodes = set()
     din_G = G.copy()
-    h_values = [round(h) for h in sorted(h_values)]
+    h_values = [round(h) for h in h_values]
     l_values = [int(h - (h * delta)) for h in h_values]
     num_clusters = len(h_values)
     blocked_clusters = [False] * num_clusters  # Inicialmente, ningún cluster está bloqueado
