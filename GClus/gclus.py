@@ -500,7 +500,7 @@ def multi_cluster_GCLUS(G, h_values, delta=0.2, q_list=None, max_iterations=5):
     final_clusters = []
     assigned_nodes = set()
     din_G = G.copy()
-    h_values = [round(h) for h in h_values]
+    h_values = [round(h) for h in sorted(h_values)]
     l_values = [int(h - (h * delta)) for h in h_values]
     num_clusters = len(h_values)
     blocked_clusters = [False] * num_clusters  # Inicialmente, ningún cluster está bloqueado
